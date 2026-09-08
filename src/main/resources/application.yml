@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: predicktions
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
