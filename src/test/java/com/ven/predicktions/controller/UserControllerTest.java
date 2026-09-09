@@ -103,4 +103,19 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error").value("NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("User not found"));
     }
+
+    @Test
+    void shouldRejectInvalidJwt() throws Exception {
+        when(jwtService.isValid("invalid-token"))
+                .thenReturn(false);
+
+        mockMvc.perform(
+                        get("/api/users/me")
+                                .header(
+                                        "Authorization",
+                                        "Bearer invalid-token"
+                                )
+                )
+                .andExpect(status().isUnauthorized());
+    }
 }
