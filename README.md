@@ -1,108 +1,157 @@
 # Predicktions
 
-Predicktions is a sports prediction platform where users predict the outcomes of upcoming matches, earn points based on their predictions, and compete on a leaderboard.
+Predicktions is a sports prediction application where authenticated users submit score predictions for matches and track their results.
 
-The platform is designed around a simple prediction workflow:
+## Backend Stack
 
-1. Users authenticate.
-2. Available matches are displayed.
-3. Users submit predictions before kickoff.
-4. Predictions are locked once a match starts.
-5. Match results are retrieved from a sports data provider.
-6. Users receive points based on the accuracy of their predictions.
-7. Users compete on a global leaderboard.
-
----
-
-## MVP Scope
-
-The initial MVP focuses on the core prediction experience.
-
-### Included
-
-- User authentication.
-- Displaying available matches.
-- Predicting match outcomes.
-- Viewing the user's predictions.
-- Automatically calculating prediction points after matches are completed.
-- Global leaderboard.
-
-### Prediction Rules
-
-For the initial MVP:
-
-- A prediction can be one of:
-    - `HOME`
-    - `DRAW`
-    - `AWAY`
-- Predictions cannot be modified after kickoff.
-- A correct outcome awards **3 points**.
-- An incorrect outcome awards **0 points**.
-
-The scoring system may evolve in future versions.
-
----
-
-## Technology Stack
-
-### Backend
-
-- Java 21 LTS
+- Java
 - Spring Boot
-- Spring Web
 - Spring Security
+- JWT authentication
 - Spring Data JPA / Hibernate
-- Bean Validation
 - PostgreSQL
 - Flyway
 - Maven
-
-### Frontend
-
-The frontend will be introduced in a later development phase.
-
-Planned technologies:
-
-- React
-- TypeScript
-- Vite
-- React Router
-- TanStack Query
-- Tailwind CSS
-
-### Development & Deployment
-
-- Git
-- GitHub
-- Docker
-- Docker Compose
-
-### Testing
-
-- JUnit
-- Spring Boot Test
-- Spring Security Test
 - Testcontainers
 
-Testcontainers will be introduced when database integration testing becomes necessary.
+## Local Development
 
----
+### Prerequisites
 
-## Prerequisites
-
-Before running the project locally, make sure the following are installed:
-
-- Java 21 or a compatible JDK
-- Git
+- Java
 - Docker
-- Docker Compose
+- Git
+- PostgreSQL, or the project's PostgreSQL Docker setup
 
-Verify the installations:
+### Environment Variables
 
-```bash
-java -version
-git --version
-docker --version
-docker compose version
+Create a local `.env` file from `.env.example`.
+
+```env
+SPRING_PROFILES_ACTIVE=dev
+DB_URL=jdbc:postgresql://localhost:5432/predicktions
+DB_USERNAME=predicktions
+DB_PASSWORD=change-me
+SERVER_PORT=8080
+JWT_SECRET=change-me
+JWT_EXPIRATION=3600000
 ```
 
+Do not commit `.env` or real secrets.
+
+### Start the Application
+
+Start the PostgreSQL database, then:
+
+```bash
+set -a
+source .env
+set +a
+
+./mvnw spring-boot:run
+```
+
+The API is available at:
+
+```text
+http://localhost:8080
+```
+
+Flyway applies database migrations automatically at application startup.
+
+## Authentication
+
+Protected API endpoints require a JWT access token.
+
+Use:
+
+```http
+Authorization: Bearer <access-token>
+```
+
+The authenticated user's identity comes from the security context. Clients do not provide their own `userId` when working with predictions.
+
+## Prediction API
+
+Detailed documentation is available at:
+
+```text
+docs/api/predictions.md
+```
+
+Current prediction endpoints:
+
+```text
+POST /api/predictions
+GET  /api/predictions
+```
+
+Predictions use an exact score format:
+
+```json
+{
+  "matchId": "...",
+  "predictedHomeScore": 2,
+  "predictedAwayScore": 1
+}
+```
+
+Scores must be non-negative integers.
+
+A user can create only one prediction per match.
+
+### Prediction Locking
+
+Predictions can only be submitted before match kickoff:
+
+```text
+Before kickoff → allowed
+At kickoff      → locked
+After kickoff   → locked
+```
+
+Predictions cannot be created for finished or cancelled matches.
+
+See `docs/api/predictions.md` for endpoint details, request/response examples, authentication, validation, duplicate behavior, locking rules, and error responses.
+
+## Testing
+
+Run the complete test suite:
+
+```bash
+./mvnw clean test
+```
+
+Integration tests use PostgreSQL Testcontainers.
+
+## Project Structure
+
+```text
+src/
+├── main/
+│   ├── java/
+│   │   └── com/ven/predicktions/
+│   └── resources/
+│       └── db/migration/
+└── test/
+
+docs/
+└── api/
+    └── predictions.md
+```
+
+## Development Workflow
+
+The project uses Jira-based development, feature branches, pull requests, and conventional commits.
+
+Example branch:
+
+```text
+feature/PRED-31-prediction-api-documentation
+```
+
+Example commit:
+
+```text
+docs(PRED-31): document prediction API
+```
