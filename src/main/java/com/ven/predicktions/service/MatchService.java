@@ -1,6 +1,6 @@
 package com.ven.predicktions.service;
 
-import com.ven.predicktions.dto.MatchResponse;
+import com.ven.predicktions.dto.match.MatchResponse;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.mapper.MatchMapper;
 import com.ven.predicktions.repository.MatchRepository;

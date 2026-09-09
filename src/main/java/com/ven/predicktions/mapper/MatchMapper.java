@@ -1,6 +1,6 @@
 package com.ven.predicktions.mapper;
 
-import com.ven.predicktions.dto.MatchResponse;
+import com.ven.predicktions.dto.match.MatchResponse;
 import com.ven.predicktions.model.Match;
 import org.springframework.stereotype.Component;
 

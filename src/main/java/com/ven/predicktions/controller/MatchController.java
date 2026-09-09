@@ -1,6 +1,6 @@
 package com.ven.predicktions.controller;
 
-import com.ven.predicktions.dto.MatchResponse;
+import com.ven.predicktions.dto.match.MatchResponse;
 import com.ven.predicktions.service.MatchService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

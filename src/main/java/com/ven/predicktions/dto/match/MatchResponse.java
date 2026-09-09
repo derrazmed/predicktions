@@ -1,4 +1,4 @@
-package com.ven.predicktions.dto;
+package com.ven.predicktions.dto.match;
 
 import com.ven.predicktions.model.MatchStatus;
 
