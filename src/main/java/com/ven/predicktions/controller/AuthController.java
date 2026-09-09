@@ -1,5 +1,7 @@
 package com.ven.predicktions.controller;
 
+import com.ven.predicktions.dto.auth.LoginRequest;
+import com.ven.predicktions.dto.auth.LoginResponse;
 import com.ven.predicktions.dto.auth.RegisterRequest;
 import com.ven.predicktions.dto.auth.RegisterResponse;
 import com.ven.predicktions.service.AuthService;
@@ -28,5 +30,12 @@ public class AuthController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(authService.register(request));
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(
+            @Valid @RequestBody LoginRequest request
+    ) {
+        return ResponseEntity.ok(authService.login(request));
     }
 }

@@ -13,6 +13,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import com.ven.predicktions.security.JwtService;
+import com.ven.predicktions.dto.auth.LoginRequest;
+import com.ven.predicktions.dto.auth.LoginResponse;
+import org.springframework.security.authentication.BadCredentialsException;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -35,6 +39,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private JwtService jwtService;
 
     @Test
     @WithMockUser
@@ -155,5 +162,74 @@ class AuthControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
+    }
+
+    @Test
+    @WithMockUser
+    void shouldLoginUser() throws Exception {
+        LoginRequest request = new LoginRequest(
+                "derrazz",
+                "password123"
+        );
+
+        LoginResponse response = new LoginResponse(
+                "jwt-token",
+                "Bearer",
+                3600
+        );
+
+        when(authService.login(any(LoginRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("jwt-token"))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").value(3600));
+    }
+
+    @Test
+    @WithMockUser
+    void shouldRejectInvalidCredentials() throws Exception {
+        LoginRequest request = new LoginRequest(
+                "derrazz",
+                "wrong-password"
+        );
+
+        when(authService.login(any(LoginRequest.class)))
+                .thenThrow(new BadCredentialsException(
+                        "Invalid username or password"
+                ));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message")
+                        .value("Invalid username or password"));
+    }
+
+    @Test
+    @WithMockUser
+    void shouldRejectInvalidLoginRequest() throws Exception {
+        LoginRequest request = new LoginRequest(
+                "",
+                ""
+        );
+
+        mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Invalid request"));
     }
 }
