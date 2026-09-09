@@ -16,6 +16,10 @@ spring:
   flyway:
     enabled: true
 
+jwt:
+  secret: "test-secret-key-that-is-at-least-32-bytes-long-123456"
+  expiration: 3600000
+
 server:
   port: 0
 
