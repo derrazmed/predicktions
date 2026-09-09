@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -29,5 +30,14 @@ public class PredictionController {
         UUID userId = (UUID) authentication.getPrincipal();
 
         return predictionService.createPrediction(userId, request);
+    }
+
+    @GetMapping
+    public List<PredictionResponse> getUserPredictions(
+            Authentication authentication
+    ) {
+        UUID userId = (UUID) authentication.getPrincipal();
+
+        return predictionService.getUserPredictions(userId);
     }
 }

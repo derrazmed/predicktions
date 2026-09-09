@@ -15,6 +15,7 @@ import com.ven.predicktions.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -72,5 +73,14 @@ public class PredictionServiceImpl implements PredictionService {
         Prediction savedPrediction = predictionRepository.save(prediction);
 
         return predictionMapper.toResponse(savedPrediction);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PredictionResponse> getUserPredictions(UUID userId) {
+        return predictionRepository.findAllByUserId(userId)
+                .stream()
+                .map(predictionMapper::toResponse)
+                .toList();
     }
 }
