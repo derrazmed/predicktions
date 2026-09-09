@@ -2,8 +2,11 @@ package com.ven.predicktions.service.impl;
 
 import com.ven.predicktions.dto.prediction.CreatePredictionRequest;
 import com.ven.predicktions.dto.prediction.PredictionResponse;
+import com.ven.predicktions.exception.InvalidPredictionException;
+import com.ven.predicktions.exception.PredictionLockedException;
 import com.ven.predicktions.mapper.PredictionMapper;
 import com.ven.predicktions.model.Match;
+import com.ven.predicktions.model.MatchStatus;
 import com.ven.predicktions.model.Prediction;
 import com.ven.predicktions.model.User;
 import com.ven.predicktions.repository.MatchRepository;
@@ -15,6 +18,7 @@ import com.ven.predicktions.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,6 +44,7 @@ public class PredictionServiceImpl implements PredictionService {
     }
 
     @Override
+    @Transactional
     public PredictionResponse createPrediction(
             UUID userId,
             CreatePredictionRequest request
@@ -53,6 +58,8 @@ public class PredictionServiceImpl implements PredictionService {
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Match not found")
                 );
+
+        validatePredictionAllowed(match);
 
         if (predictionRepository
                 .findByUserIdAndMatchId(userId, request.matchId())
@@ -82,5 +89,26 @@ public class PredictionServiceImpl implements PredictionService {
                 .stream()
                 .map(predictionMapper::toResponse)
                 .toList();
+    }
+
+    private void validatePredictionAllowed(Match match) {
+
+        if (match.getStatus() == MatchStatus.FINISHED) {
+            throw new InvalidPredictionException(
+                    "Predictions cannot be submitted for a finished match."
+            );
+        }
+
+        if (match.getStatus() == MatchStatus.CANCELLED) {
+            throw new InvalidPredictionException(
+                    "Predictions cannot be submitted for a cancelled match."
+            );
+        }
+
+        if (!Instant.now().isBefore(match.getKickoffAt())) {
+            throw new PredictionLockedException(
+                    "Predictions are locked because the match has already started."
+            );
+        }
     }
 }
