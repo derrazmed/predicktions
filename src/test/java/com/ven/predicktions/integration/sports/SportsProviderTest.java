@@ -12,7 +12,7 @@ class SportsProviderTest {
 
     @Test
     void providerShouldReturnNormalizedMatches() {
-        SportsProvider provider = competitionCode -> List.of(
+        SportsProvider provider = (competitionCode, matchday) -> List.of(
                 new SportsMatch(
                         "575335",
                         "Fenerbahçe SK",
@@ -24,7 +24,7 @@ class SportsProviderTest {
                 )
         );
 
-        List<SportsMatch> matches = provider.getMatches("CL");
+        List<SportsMatch> matches = provider.getMatches("CL", 1);
 
         assertThat(matches).hasSize(1);
         assertThat(matches.getFirst().externalId()).isEqualTo("575335");

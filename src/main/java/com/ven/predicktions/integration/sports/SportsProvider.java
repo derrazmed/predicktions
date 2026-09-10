@@ -4,5 +4,5 @@ import java.util.List;
 
 public interface SportsProvider {
 
-    List<SportsMatch> getMatches(String competitionCode);
+    List<SportsMatch> getMatches(String competitionCode, Integer matchday);
 }

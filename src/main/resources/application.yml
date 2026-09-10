@@ -11,3 +11,7 @@ spring:
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION:3600000}
+
+sports:
+  football-data:
+    api-token: ${FOOTBALL_DATA_API_TOKEN}

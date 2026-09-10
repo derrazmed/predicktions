@@ -100,4 +100,13 @@ public class Match {
     public void setStatus(MatchStatus status) {
         this.status = status;
     }
+
+    public void updateFrom(String homeTeam, String awayTeam, Instant kickoffAt, Integer homeScore, Integer awayScore, MatchStatus status) {
+        this.homeTeam = homeTeam;
+        this.awayTeam = awayTeam;
+        this.kickoffAt = kickoffAt;
+        this.homeScore = homeScore;
+        this.awayScore = awayScore;
+        this.status = status;
+    }
 }
