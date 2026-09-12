@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,6 +42,7 @@ class MatchSyncServiceImplTest {
 
     @Test
     void shouldCreateNewMatchesWhenTheyDoNotExist() {
+
         SportsMatch sportsMatch = new SportsMatch(
                 "575335",
                 "Fenerbahçe SK",
@@ -51,7 +53,7 @@ class MatchSyncServiceImplTest {
                 MatchStatus.SCHEDULED
         );
 
-        when(sportsProvider.getMatches("CL", 1))
+        when(sportsProvider.getCompetitionMatches("CL"))
                 .thenReturn(List.of(sportsMatch));
 
         when(matchRepository.findByExternalId("575335"))
@@ -60,26 +62,42 @@ class MatchSyncServiceImplTest {
         when(matchRepository.save(any(Match.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        matchSyncService.synchronizeMatches("CL", 1);
+        matchSyncService.synchronizeFixtures("CL");
 
-        ArgumentCaptor<Match> captor = ArgumentCaptor.forClass(Match.class);
+        ArgumentCaptor<Match> captor =
+                ArgumentCaptor.forClass(Match.class);
 
         verify(matchRepository).save(captor.capture());
 
         Match savedMatch = captor.getValue();
 
-        assertThat(savedMatch.getExternalId()).isEqualTo("575335");
-        assertThat(savedMatch.getHomeTeam()).isEqualTo("Fenerbahçe SK");
-        assertThat(savedMatch.getAwayTeam()).isEqualTo("AS Roma");
+        assertThat(savedMatch.getExternalId())
+                .isEqualTo("575335");
+
+        assertThat(savedMatch.getHomeTeam())
+                .isEqualTo("Fenerbahçe SK");
+
+        assertThat(savedMatch.getAwayTeam())
+                .isEqualTo("AS Roma");
+
         assertThat(savedMatch.getKickoffAt())
-                .isEqualTo(Instant.parse("2026-09-10T16:45:00Z"));
-        assertThat(savedMatch.getHomeScore()).isNull();
-        assertThat(savedMatch.getAwayScore()).isNull();
-        assertThat(savedMatch.getStatus()).isEqualTo(MatchStatus.SCHEDULED);
+                .isEqualTo(
+                        Instant.parse("2026-09-10T16:45:00Z")
+                );
+
+        assertThat(savedMatch.getHomeScore())
+                .isNull();
+
+        assertThat(savedMatch.getAwayScore())
+                .isNull();
+
+        assertThat(savedMatch.getStatus())
+                .isEqualTo(MatchStatus.SCHEDULED);
     }
 
     @Test
     void shouldUpdateExistingMatchInsteadOfCreatingDuplicate() {
+
         Match existingMatch = new Match(
                 "575335",
                 "Fenerbahçe SK",
@@ -88,7 +106,7 @@ class MatchSyncServiceImplTest {
                 MatchStatus.SCHEDULED
         );
 
-        SportsMatch updatedMatch = new SportsMatch(
+        SportsMatch finishedMatch = new SportsMatch(
                 "575335",
                 "Fenerbahçe SK",
                 "AS Roma",
@@ -98,8 +116,8 @@ class MatchSyncServiceImplTest {
                 MatchStatus.FINISHED
         );
 
-        when(sportsProvider.getMatches("CL", 1))
-                .thenReturn(List.of(updatedMatch));
+        when(sportsProvider.getMatchdayMatches("CL", 1))
+                .thenReturn(List.of(finishedMatch));
 
         when(matchRepository.findByExternalId("575335"))
                 .thenReturn(Optional.of(existingMatch));
@@ -107,18 +125,26 @@ class MatchSyncServiceImplTest {
         when(matchRepository.save(any(Match.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        matchSyncService.synchronizeMatches("CL", 1);
+        matchSyncService.synchronizeResults("CL", 1);
 
         verify(matchRepository).save(existingMatch);
 
-        assertThat(existingMatch.getExternalId()).isEqualTo("575335");
-        assertThat(existingMatch.getHomeScore()).isEqualTo(2);
-        assertThat(existingMatch.getAwayScore()).isEqualTo(1);
-        assertThat(existingMatch.getStatus()).isEqualTo(MatchStatus.FINISHED);
+        assertThat(existingMatch.getExternalId())
+                .isEqualTo("575335");
+
+        assertThat(existingMatch.getHomeScore())
+                .isEqualTo(2);
+
+        assertThat(existingMatch.getAwayScore())
+                .isEqualTo(1);
+
+        assertThat(existingMatch.getStatus())
+                .isEqualTo(MatchStatus.FINISHED);
     }
 
     @Test
     void shouldSynchronizeMultipleMatchesInOneBatch() {
+
         SportsMatch firstMatch = new SportsMatch(
                 "575335",
                 "Fenerbahçe SK",
@@ -133,14 +159,16 @@ class MatchSyncServiceImplTest {
                 "575336",
                 "PSV",
                 "Shakhtar Donetsk",
-                Instant.parse("2026-09-10T16:45:00Z"),
+                Instant.parse("2026-09-10T19:00:00Z"),
                 null,
                 null,
                 MatchStatus.SCHEDULED
         );
 
-        when(sportsProvider.getMatches("CL", 1))
-                .thenReturn(List.of(firstMatch, secondMatch));
+        when(sportsProvider.getCompetitionMatches("CL"))
+                .thenReturn(
+                        List.of(firstMatch, secondMatch)
+                );
 
         when(matchRepository.findByExternalId("575335"))
                 .thenReturn(Optional.empty());
@@ -151,44 +179,116 @@ class MatchSyncServiceImplTest {
         when(matchRepository.save(any(Match.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        matchSyncService.synchronizeMatches("CL", 1);
+        matchSyncService.synchronizeFixtures("CL");
 
-        verify(sportsProvider).getMatches("CL", 1);
-        verify(matchRepository).findByExternalId("575335");
-        verify(matchRepository).findByExternalId("575336");
-        verify(matchRepository, times(2)).save(any(Match.class));
+        verify(sportsProvider)
+                .getCompetitionMatches("CL");
+
+        verify(matchRepository)
+                .findByExternalId("575335");
+
+        verify(matchRepository)
+                .findByExternalId("575336");
+
+        verify(matchRepository, times(2))
+                .save(any(Match.class));
     }
 
     @Test
     void shouldNotSaveAnythingWhenProviderReturnsNoMatches() {
-        when(sportsProvider.getMatches("CL", 1))
+
+        when(sportsProvider.getCompetitionMatches("CL"))
                 .thenReturn(List.of());
 
-        matchSyncService.synchronizeMatches("CL", 1);
+        matchSyncService.synchronizeFixtures("CL");
 
-        verify(sportsProvider).getMatches("CL", 1);
-        verify(matchRepository, never()).findByExternalId(anyString());
-        verify(matchRepository, never()).save(any(Match.class));
+        verify(sportsProvider)
+                .getCompetitionMatches("CL");
+
+        verify(matchRepository, never())
+                .findByExternalId(anyString());
+
+        verify(matchRepository, never())
+                .save(any(Match.class));
     }
 
     @Test
     void shouldPropagateProviderFailure() {
-        RuntimeException exception =
-                new RuntimeException("External provider unavailable");
 
-        when(sportsProvider.getMatches("CL", 1))
+        RuntimeException exception =
+                new RuntimeException(
+                        "External provider unavailable"
+                );
+
+        when(sportsProvider.getCompetitionMatches("CL"))
                 .thenThrow(exception);
 
-        RuntimeException thrown = org.assertj.core.api.Assertions
-                .catchThrowableOfType(
-                        () -> matchSyncService.synchronizeMatches("CL", 1),
+        RuntimeException thrown =
+                org.assertj.core.api.Assertions.catchThrowableOfType(
+                        () ->
+                                matchSyncService
+                                        .synchronizeFixtures("CL"),
                         RuntimeException.class
                 );
 
         assertThat(thrown)
                 .isSameAs(exception);
 
-        verify(matchRepository, never()).findByExternalId(anyString());
-        verify(matchRepository, never()).save(any(Match.class));
+        verify(matchRepository, never())
+                .findByExternalId(anyString());
+
+        verify(matchRepository, never())
+                .save(any(Match.class));
+    }
+
+    @Test
+    void shouldSynchronizeResultsUsingMatchday() {
+
+        SportsMatch finishedMatch = new SportsMatch(
+                "575337",
+                "Barcelona",
+                "Bayern München",
+                Instant.parse("2026-09-11T19:00:00Z"),
+                3,
+                2,
+                MatchStatus.FINISHED
+        );
+
+        when(sportsProvider.getMatchdayMatches("CL", 2))
+                .thenReturn(List.of(finishedMatch));
+
+        Match existingMatch = new Match(
+                "575337",
+                "Barcelona",
+                "Bayern München",
+                Instant.parse("2026-09-11T19:00:00Z"),
+                MatchStatus.SCHEDULED
+        );
+
+        when(matchRepository.findByExternalId("575337"))
+                .thenReturn(Optional.of(existingMatch));
+
+        when(matchRepository.save(any(Match.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        matchSyncService.synchronizeResults("CL", 2);
+
+        verify(sportsProvider)
+                .getMatchdayMatches("CL", 2);
+
+        verify(matchRepository)
+                .findByExternalId("575337");
+
+        verify(matchRepository)
+                .save(existingMatch);
+
+        assertThat(existingMatch.getHomeScore())
+                .isEqualTo(3);
+
+        assertThat(existingMatch.getAwayScore())
+                .isEqualTo(2);
+
+        assertThat(existingMatch.getStatus())
+                .isEqualTo(MatchStatus.FINISHED);
     }
 }

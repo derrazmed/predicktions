@@ -5,16 +5,18 @@ import com.ven.predicktions.integration.sports.SportsProvider;
 import com.ven.predicktions.model.Match;
 import com.ven.predicktions.model.MatchStatus;
 import com.ven.predicktions.repository.MatchRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.junit.jupiter.api.BeforeEach;
 
 import java.time.Instant;
 import java.util.List;
@@ -22,11 +24,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.reset;
-
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @Testcontainers
@@ -80,10 +79,10 @@ class MatchSyncServiceIntegrationTest {
                 MatchStatus.SCHEDULED
         );
 
-        when(sportsProvider.getMatches("CL", 1))
+        when(sportsProvider.getCompetitionMatches("CL"))
                 .thenReturn(List.of(sportsMatch));
 
-        matchSyncService.synchronizeMatches("CL", 1);
+        matchSyncService.synchronizeFixtures("CL");
 
         List<Match> matches = matchRepository.findAll();
 
@@ -96,6 +95,8 @@ class MatchSyncServiceIntegrationTest {
         assertThat(match.getAwayTeam()).isEqualTo("AS Roma");
         assertThat(match.getKickoffAt())
                 .isEqualTo(Instant.parse("2026-09-10T16:45:00Z"));
+        assertThat(match.getHomeScore()).isNull();
+        assertThat(match.getAwayScore()).isNull();
         assertThat(match.getStatus())
                 .isEqualTo(MatchStatus.SCHEDULED);
     }
@@ -122,15 +123,17 @@ class MatchSyncServiceIntegrationTest {
                 MatchStatus.FINISHED
         );
 
-        when(sportsProvider.getMatches("CL", 1))
-                .thenReturn(List.of(scheduledMatch))
+        when(sportsProvider.getCompetitionMatches("CL"))
+                .thenReturn(List.of(scheduledMatch));
+
+        when(sportsProvider.getMatchdayMatches("CL", 1))
                 .thenReturn(List.of(finishedMatch));
 
-        // First synchronization
-        matchSyncService.synchronizeMatches("CL", 1);
+        // Initial fixture synchronization
+        matchSyncService.synchronizeFixtures("CL");
 
-        // Second synchronization
-        matchSyncService.synchronizeMatches("CL", 1);
+        // Result synchronization after the matchday
+        matchSyncService.synchronizeResults("CL", 1);
 
         List<Match> matches = matchRepository.findAll();
 
@@ -141,7 +144,8 @@ class MatchSyncServiceIntegrationTest {
         assertThat(match.getExternalId()).isEqualTo("575335");
         assertThat(match.getHomeScore()).isEqualTo(1);
         assertThat(match.getAwayScore()).isEqualTo(2);
-        assertThat(match.getStatus()).isEqualTo(MatchStatus.FINISHED);
+        assertThat(match.getStatus())
+                .isEqualTo(MatchStatus.FINISHED);
     }
 
     @Test
@@ -176,10 +180,14 @@ class MatchSyncServiceIntegrationTest {
                 MatchStatus.SCHEDULED
         );
 
-        when(sportsProvider.getMatches("CL", 1))
-                .thenReturn(List.of(firstMatch, secondMatch, thirdMatch));
+        when(sportsProvider.getCompetitionMatches("CL"))
+                .thenReturn(List.of(
+                        firstMatch,
+                        secondMatch,
+                        thirdMatch
+                ));
 
-        matchSyncService.synchronizeMatches("CL", 1);
+        matchSyncService.synchronizeFixtures("CL");
 
         List<Match> matches = matchRepository.findAll();
 
@@ -216,11 +224,11 @@ class MatchSyncServiceIntegrationTest {
                 MatchStatus.SCHEDULED
         );
 
-        when(sportsProvider.getMatches("CL", 1))
+        when(sportsProvider.getCompetitionMatches("CL"))
                 .thenReturn(List.of(validMatch, invalidMatch));
 
         assertThatThrownBy(() ->
-                matchSyncService.synchronizeMatches("CL", 1)
+                matchSyncService.synchronizeFixtures("CL")
         ).isInstanceOf(Exception.class);
 
         assertThat(matchRepository.findAll()).isEmpty();

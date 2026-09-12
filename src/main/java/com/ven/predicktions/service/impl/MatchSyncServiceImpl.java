@@ -26,11 +26,33 @@ public class MatchSyncServiceImpl implements MatchSyncService {
 
     @Override
     @Transactional
-    public void synchronizeMatches(String competitionCode, Integer matchday) {
+    public void synchronizeFixtures(String competitionCode) {
 
         List<SportsMatch> sportsMatches =
-                sportsProvider.getMatches(competitionCode, matchday);
+                sportsProvider.getCompetitionMatches(competitionCode);
 
+        synchronizeMatches(sportsMatches);
+    }
+
+    @Override
+    @Transactional
+    public void synchronizeResults(
+            String competitionCode,
+            Integer matchday
+    ) {
+
+        List<SportsMatch> sportsMatches =
+                sportsProvider.getMatchdayMatches(
+                        competitionCode,
+                        matchday
+                );
+
+        synchronizeMatches(sportsMatches);
+    }
+
+    private void synchronizeMatches(
+            List<SportsMatch> sportsMatches
+    ) {
         for (SportsMatch sportsMatch : sportsMatches) {
 
             Match match = matchRepository

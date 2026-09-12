@@ -2,5 +2,7 @@ package com.ven.predicktions.service;
 
 public interface MatchSyncService {
 
-    void synchronizeMatches(String competitionCode, Integer matchday);
+    void synchronizeFixtures(String competitionCode);
+
+    void synchronizeResults(String competitionCode, Integer matchday);
 }

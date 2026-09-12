@@ -21,8 +21,10 @@ public class FootballDataSportsProvider implements SportsProvider {
     }
 
     @Override
-    public List<SportsMatch> getMatches(String competitionCode, Integer matchday) {
-
+    public List<SportsMatch> getMatchdayMatches(
+            String competitionCode,
+            Integer matchday
+    ) {
         FootballDataMatchesResponse response = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/competitions/{competitionCode}/matches")
@@ -74,5 +76,26 @@ public class FootballDataSportsProvider implements SportsProvider {
                     "Unsupported football-data.org match status: " + status
             );
         };
+    }
+
+    @Override
+    public List<SportsMatch> getCompetitionMatches(
+            String competitionCode
+    ) {
+        FootballDataMatchesResponse response = restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/competitions/{competitionCode}/matches")
+                        .build(competitionCode))
+                .retrieve()
+                .body(FootballDataMatchesResponse.class);
+
+        if (response == null || response.matches() == null) {
+            return List.of();
+        }
+
+        return response.matches()
+                .stream()
+                .map(this::toSportsMatch)
+                .toList();
     }
 }

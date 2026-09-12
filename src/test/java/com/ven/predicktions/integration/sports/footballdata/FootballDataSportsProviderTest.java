@@ -84,7 +84,7 @@ class FootballDataSportsProviderTest {
                 ));
 
         List<SportsMatch> matches =
-                provider.getMatches("CL", 1);
+                provider.getMatchdayMatches("CL", 1);
 
         assertThat(matches).hasSize(1);
 
@@ -142,7 +142,7 @@ class FootballDataSportsProviderTest {
                 ));
 
         List<SportsMatch> matches =
-                provider.getMatches("CL", 1);
+                provider.getMatchdayMatches("CL", 1);
 
         assertThat(matches).hasSize(1);
 
@@ -194,7 +194,7 @@ class FootballDataSportsProviderTest {
                 ));
 
         List<SportsMatch> matches =
-                provider.getMatches("CL", 1);
+                provider.getMatchdayMatches("CL", 1);
 
         assertThat(matches.getFirst().status())
                 .isEqualTo(MatchStatus.LIVE);
@@ -220,7 +220,7 @@ class FootballDataSportsProviderTest {
                 ));
 
         List<SportsMatch> matches =
-                provider.getMatches("CL", 1);
+                provider.getMatchdayMatches("CL", 1);
 
         assertThat(matches).isEmpty();
 
