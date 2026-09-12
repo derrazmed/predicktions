@@ -1,4 +1,4 @@
-package com.ven.predicktions.service;
+package com.ven.predicktions.service.impl;
 
 import com.ven.predicktions.dto.prediction.CreatePredictionRequest;
 import com.ven.predicktions.dto.prediction.PredictionResponse;
@@ -14,7 +14,6 @@ import com.ven.predicktions.model.User;
 import com.ven.predicktions.repository.MatchRepository;
 import com.ven.predicktions.repository.PredictionRepository;
 import com.ven.predicktions.repository.UserRepository;
-import com.ven.predicktions.service.impl.PredictionServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
