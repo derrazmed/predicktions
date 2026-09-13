@@ -1,9 +1,11 @@
 package com.ven.predicktions.controller;
 
+import com.ven.predicktions.dto.leaderboard.LeaderboardEntryResponse;
 import com.ven.predicktions.dto.league.CreateLeagueRequest;
 import com.ven.predicktions.dto.league.JoinLeagueRequest;
 import com.ven.predicktions.dto.league.LeagueResponse;
 import com.ven.predicktions.dto.league.UpdateLeagueRequest;
+import com.ven.predicktions.service.LeaderboardService;
 import com.ven.predicktions.service.LeagueService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -26,9 +28,11 @@ import java.util.UUID;
 public class LeagueController {
 
     private final LeagueService leagueService;
+    private final LeaderboardService leaderboardService;
 
-    public LeagueController(LeagueService leagueService) {
+    public LeagueController(LeagueService leagueService, LeaderboardService leaderboardService) {
         this.leagueService = leagueService;
+        this.leaderboardService = leaderboardService;
     }
 
     @PostMapping
@@ -102,5 +106,18 @@ public class LeagueController {
         UUID userId = (UUID) authentication.getPrincipal();
 
         leagueService.removeMember(userId, leagueId, memberId);
+    }
+
+    @GetMapping("/{leagueId}/leaderboard")
+    public List<LeaderboardEntryResponse> getLeagueLeaderboard(
+            @PathVariable UUID leagueId,
+            Authentication authentication
+    ) {
+        UUID userId = (UUID) authentication.getPrincipal();
+
+        return leaderboardService.getLeagueLeaderboard(
+                userId,
+                leagueId
+        );
     }
 }

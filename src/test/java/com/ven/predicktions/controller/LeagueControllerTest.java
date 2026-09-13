@@ -11,6 +11,7 @@ import com.ven.predicktions.exception.GlobalExceptionHandler;
 import com.ven.predicktions.exception.OwnerCannotLeaveException;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.security.JwtService;
+import com.ven.predicktions.service.LeaderboardService;
 import com.ven.predicktions.service.LeagueService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,9 @@ class LeagueControllerTest {
 
     @MockitoBean
     private LeagueService leagueService;
+
+    @MockitoBean
+    private LeaderboardService leaderboardService;
 
     @MockitoBean
     private JwtService jwtService;
