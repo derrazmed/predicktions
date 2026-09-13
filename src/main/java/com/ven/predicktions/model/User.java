@@ -84,6 +84,10 @@ public class User {
         return role;
     }
 
+    public void promoteToAdmin() {
+        role = Role.ADMIN;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
