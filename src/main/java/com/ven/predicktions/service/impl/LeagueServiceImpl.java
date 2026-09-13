@@ -3,7 +3,9 @@ package com.ven.predicktions.service.impl;
 import com.ven.predicktions.dto.league.CreateLeagueRequest;
 import com.ven.predicktions.dto.league.JoinLeagueRequest;
 import com.ven.predicktions.dto.league.LeagueResponse;
+import com.ven.predicktions.dto.league.UpdateLeagueRequest;
 import com.ven.predicktions.exception.DuplicateResourceException;
+import com.ven.predicktions.exception.ForbiddenOperationException;
 import com.ven.predicktions.exception.OwnerCannotLeaveException;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.mapper.LeagueMapper;
@@ -18,6 +20,7 @@ import com.ven.predicktions.service.LeagueService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -55,7 +58,7 @@ public class LeagueServiceImpl implements LeagueService {
         League league = new League(request.name(), owner, joinCode);
         League savedLeague = leagueRepository.save(league);
 
-        return leagueMapper.toResponse(savedLeague);
+        return toResponse(savedLeague);
     }
 
     @Override
@@ -72,7 +75,7 @@ public class LeagueServiceImpl implements LeagueService {
 
         leagueMemberRepository.save(new LeagueMember(league, user));
 
-        return leagueMapper.toResponse(league);
+        return toResponse(league);
     }
 
     @Override
@@ -93,9 +96,97 @@ public class LeagueServiceImpl implements LeagueService {
         leagueMemberRepository.delete(membership);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<LeagueResponse> getLeaguesForUser(UUID userId) {
+        findUser(userId);
+
+        return leagueMemberRepository.findAllByUserId(userId)
+                .stream()
+                .map(LeagueMember::getLeague)
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LeagueResponse getLeague(UUID userId, UUID leagueId) {
+        League league = findLeague(leagueId);
+        requireMember(leagueId, userId);
+
+        return toResponse(league);
+    }
+
+    @Override
+    public LeagueResponse updateLeague(
+            UUID userId,
+            UUID leagueId,
+            UpdateLeagueRequest request
+    ) {
+        League league = findLeague(leagueId);
+        requireOwner(league, userId);
+
+        league.updateName(request.name());
+
+        return toResponse(league);
+    }
+
+    @Override
+    public void removeMember(UUID userId, UUID leagueId, UUID memberId) {
+        League league = findLeague(leagueId);
+        requireOwner(league, userId);
+
+        if (league.getOwner().getId().equals(memberId)) {
+            throw new OwnerCannotLeaveException(
+                    "League owner cannot be removed from the league"
+            );
+        }
+
+        LeagueMember membership = leagueMemberRepository
+                .findByLeagueIdAndUserId(leagueId, memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("Membership not found"));
+
+        leagueMemberRepository.delete(membership);
+    }
+
     private User findUser(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+
+    private League findLeague(UUID leagueId) {
+        return leagueRepository.findById(leagueId)
+                .orElseThrow(() -> new ResourceNotFoundException("League not found"));
+    }
+
+    private void requireMember(UUID leagueId, UUID userId) {
+        if (!leagueMemberRepository.existsByLeagueIdAndUserId(leagueId, userId)) {
+            throw new ForbiddenOperationException(
+                    "User is not a member of this league"
+            );
+        }
+    }
+
+    private void requireOwner(League league, UUID userId) {
+        if (!league.getOwner().getId().equals(userId)) {
+            throw new ForbiddenOperationException(
+                    "Only the league owner can perform this operation"
+            );
+        }
+    }
+
+    private LeagueResponse toResponse(League league) {
+        List<String> memberUsernames = leagueMemberRepository
+                .findAllByLeagueId(league.getId())
+                .stream()
+                .map(member -> member.getUser().getUsername())
+                .toList();
+
+        return leagueMapper.toResponse(
+                league,
+                memberUsernames.size(),
+                memberUsernames
+        );
     }
 
     private String normalizeJoinCode(String joinCode) {
