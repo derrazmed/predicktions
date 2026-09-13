@@ -230,6 +230,35 @@ class AuthServiceTest {
     }
 
     @Test
+    void shouldIssueAdminRoleTokenForAdminUser() {
+        LoginRequest request = new LoginRequest(
+                "admin",
+                "password123"
+        );
+
+        User user = new User(
+                "admin",
+                "admin@example.com",
+                "hashed-password",
+                Role.ADMIN
+        );
+
+        when(userRepository.findByUsername("admin"))
+                .thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed-password"))
+                .thenReturn(true);
+        when(jwtService.generateToken(user.getId(), Role.ADMIN))
+                .thenReturn("admin-jwt-token");
+        when(jwtService.getExpiration())
+                .thenReturn(3600000L);
+
+        LoginResponse response = authService.login(request);
+
+        assertEquals("admin-jwt-token", response.accessToken());
+        verify(jwtService).generateToken(user.getId(), Role.ADMIN);
+    }
+
+    @Test
     void shouldRejectUnknownUsername() {
         LoginRequest request = new LoginRequest(
                 "unknown",
