@@ -4,6 +4,7 @@ import com.ven.predicktions.dto.auth.RegisterRequest;
 import com.ven.predicktions.dto.auth.RegisterResponse;
 import com.ven.predicktions.exception.DuplicateResourceException;
 import com.ven.predicktions.model.User;
+import com.ven.predicktions.model.Role;
 import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.security.JwtService;
 import com.ven.predicktions.service.impl.AuthServiceImpl;
@@ -75,9 +76,12 @@ class AuthServiceTest {
 
         assertEquals("derrazz", response.username());
         assertEquals("user@example.com", response.email());
+        assertEquals(Role.USER, response.role());
 
         verify(passwordEncoder).encode("password123");
-        verify(userRepository).save(any(User.class));
+        verify(userRepository).save(argThat(user ->
+                user.getRole() == Role.USER
+        ));
     }
 
     @Test
@@ -176,7 +180,7 @@ class AuthServiceTest {
         when(passwordEncoder.matches("password123", "hashed-password"))
                 .thenReturn(true);
 
-        when(jwtService.generateToken(user.getId()))
+        when(jwtService.generateToken(user.getId(), Role.USER))
                 .thenReturn(token);
 
         when(jwtService.getExpiration())
@@ -190,7 +194,7 @@ class AuthServiceTest {
 
         verify(userRepository).findByUsername("derrazz");
         verify(passwordEncoder).matches("password123", "hashed-password");
-        verify(jwtService).generateToken(user.getId());
+        verify(jwtService).generateToken(user.getId(), Role.USER);
     }
 
     @Test

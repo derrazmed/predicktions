@@ -1,6 +1,7 @@
 package com.ven.predicktions.security;
 
 import com.ven.predicktions.config.JwtProperties;
+import com.ven.predicktions.model.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +32,17 @@ class JwtServiceTest {
         assertNotNull(token);
         assertTrue(jwtService.isValid(token));
         assertEquals(userId, jwtService.extractUserId(token));
+        assertEquals(Role.USER, jwtService.extractRole(token));
+    }
+
+    @Test
+    void shouldPreserveAdminRoleInSignedToken() {
+        UUID userId = UUID.randomUUID();
+
+        String token = jwtService.generateToken(userId, Role.ADMIN);
+
+        assertTrue(jwtService.isValid(token));
+        assertEquals(Role.ADMIN, jwtService.extractRole(token));
     }
 
     @Test

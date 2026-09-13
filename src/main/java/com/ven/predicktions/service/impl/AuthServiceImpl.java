@@ -2,6 +2,7 @@ package com.ven.predicktions.service.impl;
 
 import com.ven.predicktions.dto.auth.RegisterRequest;
 import com.ven.predicktions.dto.auth.RegisterResponse;
+import com.ven.predicktions.model.Role;
 import com.ven.predicktions.model.User;
 import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.service.AuthService;
@@ -45,7 +46,8 @@ public class AuthServiceImpl implements AuthService {
         User user = new User(
                 request.username(),
                 request.email(),
-                passwordHash
+                passwordHash,
+                Role.USER
         );
 
         User savedUser = userRepository.save(user);
@@ -54,7 +56,8 @@ public class AuthServiceImpl implements AuthService {
                 savedUser.getId(),
                 savedUser.getUsername(),
                 savedUser.getEmail(),
-                savedUser.getCreatedAt()
+                savedUser.getCreatedAt(),
+                savedUser.getRole()
         );
     }
 
@@ -69,7 +72,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BadCredentialsException("Invalid username or password");
         }
 
-        String token = jwtService.generateToken(user.getId());
+        String token = jwtService.generateToken(user.getId(), user.getRole());
 
         return new LoginResponse(
                 token,
