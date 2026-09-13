@@ -167,6 +167,152 @@ class LeagueControllerIntegrationTest {
         assertThat(leagueMemberRepository.count()).isEqualTo(2);
     }
 
+    @Test
+    void authenticatedUserCanJoinLeagueWithJoinCode() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        JsonNode league = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "Office League"
+                        }
+                        """).getBody()
+        );
+        UUID leagueId = UUID.fromString(league.get("id").asText());
+        String joinCode = league.get("joinCode").asText();
+
+        String memberToken = loginAndGetToken(user.getUsername(), "password123");
+        ResponseEntity<String> response = postJoin(memberToken, joinCode);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("id").asText()).isEqualTo(leagueId.toString());
+        assertThat(body.get("joinCode").asText()).isEqualTo(joinCode);
+        assertThat(leagueMemberRepository.findByLeagueIdAndUserId(leagueId, user.getId()))
+                .isPresent();
+        assertThat(leagueMemberRepository.findAllByLeagueId(leagueId)).hasSize(2);
+    }
+
+    @Test
+    void unauthenticatedUserCannotJoinLeague() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        String joinCode = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "Office League"
+                        }
+                        """).getBody()
+        ).get("joinCode").asText();
+
+        ResponseEntity<String> response = postJoin(null, joinCode);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(leagueMemberRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void invalidJoinCodeIsRejected() throws Exception {
+        String token = loginAndGetToken(user.getUsername(), "password123");
+
+        ResponseEntity<String> response = postJoin(token, "UNKNOWN1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("error").asText()).isEqualTo("NOT_FOUND");
+        assertThat(leagueMemberRepository.count()).isZero();
+    }
+
+    @Test
+    void userCannotJoinTheSameLeagueTwice() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        String joinCode = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "Office League"
+                        }
+                        """).getBody()
+        ).get("joinCode").asText();
+
+        String memberToken = loginAndGetToken(user.getUsername(), "password123");
+        ResponseEntity<String> firstJoin = postJoin(memberToken, joinCode);
+        ResponseEntity<String> secondJoin = postJoin(memberToken, joinCode);
+
+        assertThat(firstJoin.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(secondJoin.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(leagueMemberRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void memberCanLeaveLeague() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        JsonNode league = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "Office League"
+                        }
+                        """).getBody()
+        );
+        UUID leagueId = UUID.fromString(league.get("id").asText());
+        String joinCode = league.get("joinCode").asText();
+
+        String memberToken = loginAndGetToken(user.getUsername(), "password123");
+        assertThat(postJoin(memberToken, joinCode).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+
+        ResponseEntity<String> response = deleteMembership(memberToken, leagueId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(leagueMemberRepository.findByLeagueIdAndUserId(leagueId, user.getId()))
+                .isEmpty();
+        assertThat(leagueMemberRepository.findByLeagueIdAndUserId(leagueId, owner.getId()))
+                .isPresent();
+    }
+
+    @Test
+    void ownerCannotLeaveLeague() throws Exception {
+        String ownerToken = loginAndGetToken(user.getUsername(), "password123");
+        JsonNode league = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "Office League"
+                        }
+                        """).getBody()
+        );
+        UUID leagueId = UUID.fromString(league.get("id").asText());
+
+        ResponseEntity<String> response = deleteMembership(ownerToken, leagueId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("error").asText()).isEqualTo("OWNER_CANNOT_LEAVE");
+        assertThat(leagueMemberRepository.findByLeagueIdAndUserId(leagueId, user.getId()))
+                .isPresent();
+    }
+
+    @Test
+    void unauthenticatedUserCannotLeaveLeague() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        UUID leagueId = UUID.fromString(
+                objectMapper.readTree(
+                        postLeague(ownerToken, """
+                                {
+                                    "name": "Office League"
+                                }
+                                """).getBody()
+                ).get("id").asText()
+        );
+
+        ResponseEntity<String> response = deleteMembership(null, leagueId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(leagueMemberRepository.findAllByLeagueId(leagueId)).hasSize(1);
+    }
+
     private ResponseEntity<String> postLeague(String token, String requestBody) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -179,6 +325,43 @@ class LeagueControllerIntegrationTest {
                 "/api/leagues",
                 HttpMethod.POST,
                 new HttpEntity<>(requestBody, headers),
+                String.class
+        );
+    }
+
+    private ResponseEntity<String> postJoin(String token, String joinCode) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+
+        String requestBody = """
+                {
+                    "joinCode": "%s"
+                }
+                """.formatted(joinCode);
+
+        return restTemplate.exchange(
+                "/api/leagues/join",
+                HttpMethod.POST,
+                new HttpEntity<>(requestBody, headers),
+                String.class
+        );
+    }
+
+    private ResponseEntity<String> deleteMembership(String token, UUID leagueId) {
+        HttpHeaders headers = new HttpHeaders();
+
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+
+        return restTemplate.exchange(
+                "/api/leagues/" + leagueId + "/membership",
+                HttpMethod.DELETE,
+                new HttpEntity<>(headers),
                 String.class
         );
     }

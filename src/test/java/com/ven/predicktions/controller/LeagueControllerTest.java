@@ -2,8 +2,12 @@ package com.ven.predicktions.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ven.predicktions.dto.league.CreateLeagueRequest;
+import com.ven.predicktions.dto.league.JoinLeagueRequest;
 import com.ven.predicktions.dto.league.LeagueResponse;
+import com.ven.predicktions.exception.DuplicateResourceException;
 import com.ven.predicktions.exception.GlobalExceptionHandler;
+import com.ven.predicktions.exception.OwnerCannotLeaveException;
+import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.security.JwtService;
 import com.ven.predicktions.service.LeagueService;
 import org.junit.jupiter.api.Test;
@@ -23,10 +27,12 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -110,6 +116,157 @@ class LeagueControllerTest {
                 .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
 
         verify(leagueService, never()).createLeague(any(), any());
+    }
+
+    @Test
+    void shouldJoinLeagueForAuthenticatedUser() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+        JoinLeagueRequest request = new JoinLeagueRequest("AB23KLP9");
+        LeagueResponse response = new LeagueResponse(
+                leagueId,
+                "Office League",
+                UUID.randomUUID(),
+                "AB23KLP9",
+                Instant.parse("2026-09-12T20:00:00Z")
+        );
+
+        when(leagueService.joinLeague(eq(userId), any(JoinLeagueRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(
+                        post("/api/leagues/join")
+                                .with(authentication(userId))
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(leagueId.toString()))
+                .andExpect(jsonPath("$.joinCode").value("AB23KLP9"));
+    }
+
+    @Test
+    void shouldRejectUnauthenticatedJoin() throws Exception {
+        JoinLeagueRequest request = new JoinLeagueRequest("AB23KLP9");
+
+        mockMvc.perform(
+                        post("/api/leagues/join")
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isUnauthorized());
+
+        verify(leagueService, never()).joinLeague(any(), any());
+    }
+
+    @Test
+    void shouldRejectBlankJoinCode() throws Exception {
+        UUID userId = UUID.randomUUID();
+        JoinLeagueRequest request = new JoinLeagueRequest("  ");
+
+        mockMvc.perform(
+                        post("/api/leagues/join")
+                                .with(authentication(userId))
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
+
+        verify(leagueService, never()).joinLeague(any(), any());
+    }
+
+    @Test
+    void shouldRejectInvalidJoinCode() throws Exception {
+        UUID userId = UUID.randomUUID();
+        JoinLeagueRequest request = new JoinLeagueRequest("UNKNOWN1");
+
+        when(leagueService.joinLeague(eq(userId), any(JoinLeagueRequest.class)))
+                .thenThrow(new ResourceNotFoundException("Invalid join code"));
+
+        mockMvc.perform(
+                        post("/api/leagues/join")
+                                .with(authentication(userId))
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Invalid join code"));
+    }
+
+    @Test
+    void shouldRejectJoiningTheSameLeagueTwice() throws Exception {
+        UUID userId = UUID.randomUUID();
+        JoinLeagueRequest request = new JoinLeagueRequest("AB23KLP9");
+
+        when(leagueService.joinLeague(eq(userId), any(JoinLeagueRequest.class)))
+                .thenThrow(new DuplicateResourceException(
+                        "User is already a member of this league"
+                ));
+
+        mockMvc.perform(
+                        post("/api/leagues/join")
+                                .with(authentication(userId))
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("RESOURCE_ALREADY_EXISTS"));
+    }
+
+    @Test
+    void shouldLeaveLeagueForAuthenticatedUser() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+
+        mockMvc.perform(
+                        delete("/api/leagues/{leagueId}/membership", leagueId)
+                                .with(authentication(userId))
+                                .with(csrf())
+                )
+                .andExpect(status().isNoContent());
+
+        verify(leagueService).leaveLeague(userId, leagueId);
+    }
+
+    @Test
+    void shouldRejectUnauthenticatedLeave() throws Exception {
+        UUID leagueId = UUID.randomUUID();
+
+        mockMvc.perform(
+                        delete("/api/leagues/{leagueId}/membership", leagueId)
+                                .with(csrf())
+                )
+                .andExpect(status().isUnauthorized());
+
+        verify(leagueService, never()).leaveLeague(any(), any());
+    }
+
+    @Test
+    void shouldRejectOwnerLeavingLeague() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+
+        doThrow(new OwnerCannotLeaveException("League owner cannot leave the league"))
+                .when(leagueService)
+                .leaveLeague(userId, leagueId);
+
+        mockMvc.perform(
+                        delete("/api/leagues/{leagueId}/membership", leagueId)
+                                .with(authentication(userId))
+                                .with(csrf())
+                )
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("OWNER_CANNOT_LEAVE"))
+                .andExpect(jsonPath("$.message").value(
+                        "League owner cannot leave the league"
+                ));
     }
 
     private RequestPostProcessor authentication(UUID userId) {

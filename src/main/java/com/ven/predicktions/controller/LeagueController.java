@@ -1,11 +1,14 @@
 package com.ven.predicktions.controller;
 
 import com.ven.predicktions.dto.league.CreateLeagueRequest;
+import com.ven.predicktions.dto.league.JoinLeagueRequest;
 import com.ven.predicktions.dto.league.LeagueResponse;
 import com.ven.predicktions.service.LeagueService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,5 +36,27 @@ public class LeagueController {
         UUID userId = (UUID) authentication.getPrincipal();
 
         return leagueService.createLeague(userId, request);
+    }
+
+    @PostMapping("/join")
+    @ResponseStatus(HttpStatus.CREATED)
+    public LeagueResponse joinLeague(
+            @Valid @RequestBody JoinLeagueRequest request,
+            Authentication authentication
+    ) {
+        UUID userId = (UUID) authentication.getPrincipal();
+
+        return leagueService.joinLeague(userId, request);
+    }
+
+    @DeleteMapping("/{leagueId}/membership")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void leaveLeague(
+            @PathVariable UUID leagueId,
+            Authentication authentication
+    ) {
+        UUID userId = (UUID) authentication.getPrincipal();
+
+        leagueService.leaveLeague(userId, leagueId);
     }
 }
