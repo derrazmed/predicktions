@@ -118,6 +118,24 @@ public class GlobalExceptionHandler {
                 .body(error);
     }
 
+    @ExceptionHandler(OwnerCannotLeaveException.class)
+    public ResponseEntity<ApiErrorResponse> handleOwnerCannotLeave(
+            OwnerCannotLeaveException exception,
+            HttpServletRequest request
+    ) {
+        ApiErrorResponse error = new ApiErrorResponse(
+                Instant.now(),
+                HttpStatus.CONFLICT.value(),
+                "OWNER_CANNOT_LEAVE",
+                exception.getMessage(),
+                request.getRequestURI()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(error);
+    }
+
     @ExceptionHandler(InvalidPredictionException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidPrediction(
             InvalidPredictionException exception,
