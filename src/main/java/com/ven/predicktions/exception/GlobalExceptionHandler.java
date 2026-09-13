@@ -136,6 +136,24 @@ public class GlobalExceptionHandler {
                 .body(error);
     }
 
+    @ExceptionHandler(ForbiddenOperationException.class)
+    public ResponseEntity<ApiErrorResponse> handleForbiddenOperation(
+            ForbiddenOperationException exception,
+            HttpServletRequest request
+    ) {
+        ApiErrorResponse error = new ApiErrorResponse(
+                Instant.now(),
+                HttpStatus.FORBIDDEN.value(),
+                "FORBIDDEN",
+                exception.getMessage(),
+                request.getRequestURI()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(error);
+    }
+
     @ExceptionHandler(InvalidPredictionException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidPrediction(
             InvalidPredictionException exception,

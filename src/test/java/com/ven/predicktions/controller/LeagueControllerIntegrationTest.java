@@ -23,7 +23,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -313,6 +315,208 @@ class LeagueControllerIntegrationTest {
         assertThat(leagueMemberRepository.findAllByLeagueId(leagueId)).hasSize(1);
     }
 
+    @Test
+    void authenticatedUserCanRetrieveLeaguesTheyBelongTo() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        String memberToken = loginAndGetToken(user.getUsername(), "password123");
+
+        JsonNode firstLeague = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "First League"
+                        }
+                        """).getBody()
+        );
+        JsonNode secondLeague = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "Second League"
+                        }
+                        """).getBody()
+        );
+
+        postJoin(memberToken, firstLeague.get("joinCode").asText());
+
+        ResponseEntity<String> response = getLeagues(memberToken);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body).hasSize(1);
+        assertThat(body.get(0).get("id").asText())
+                .isEqualTo(firstLeague.get("id").asText());
+        assertThat(body.get(0).get("name").asText()).isEqualTo("First League");
+        assertThat(body.get(0).get("memberCount").asInt()).isEqualTo(2);
+        assertThat(memberUsernames(body.get(0)))
+                .containsExactlyInAnyOrder(owner.getUsername(), user.getUsername());
+        assertThat(body.get(0).get("joinCode").asText())
+                .isEqualTo(firstLeague.get("joinCode").asText());
+        assertThat(body.get(0).get("id").asText())
+                .isNotEqualTo(secondLeague.get("id").asText());
+    }
+
+    @Test
+    void leagueMemberCanRetrieveLeagueDetails() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        JsonNode league = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "Office League"
+                        }
+                        """).getBody()
+        );
+        UUID leagueId = UUID.fromString(league.get("id").asText());
+
+        String memberToken = loginAndGetToken(user.getUsername(), "password123");
+        postJoin(memberToken, league.get("joinCode").asText());
+
+        ResponseEntity<String> response = getLeague(memberToken, leagueId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("id").asText()).isEqualTo(leagueId.toString());
+        assertThat(body.get("name").asText()).isEqualTo("Office League");
+        assertThat(body.get("ownerId").asText()).isEqualTo(owner.getId().toString());
+        assertThat(body.get("memberCount").asInt()).isEqualTo(2);
+        assertThat(memberUsernames(body))
+                .containsExactlyInAnyOrder(owner.getUsername(), user.getUsername());
+        assertThat(body.get("joinCode").asText()).isEqualTo(league.get("joinCode").asText());
+    }
+
+    @Test
+    void nonMemberCannotRetrieveLeagueDetails() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        UUID leagueId = UUID.fromString(
+                objectMapper.readTree(
+                        postLeague(ownerToken, """
+                                {
+                                    "name": "Office League"
+                                }
+                                """).getBody()
+                ).get("id").asText()
+        );
+
+        String token = loginAndGetToken(user.getUsername(), "password123");
+        ResponseEntity<String> response = getLeague(token, leagueId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("error").asText()).isEqualTo("FORBIDDEN");
+    }
+
+    @Test
+    void ownerCanUpdateLeagueName() throws Exception {
+        String ownerToken = loginAndGetToken(user.getUsername(), "password123");
+        UUID leagueId = UUID.fromString(
+                objectMapper.readTree(
+                        postLeague(ownerToken, """
+                                {
+                                    "name": "Office League"
+                                }
+                                """).getBody()
+                ).get("id").asText()
+        );
+
+        ResponseEntity<String> response = patchLeague(
+                ownerToken,
+                leagueId,
+                """
+                        {
+                            "name": "Renamed League"
+                        }
+                        """
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("name").asText()).isEqualTo("Renamed League");
+        assertThat(leagueRepository.findById(leagueId))
+                .hasValueSatisfying(league ->
+                        assertThat(league.getName()).isEqualTo("Renamed League")
+                );
+    }
+
+    @Test
+    void nonOwnerCannotUpdateLeagueName() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        UUID leagueId = UUID.fromString(
+                objectMapper.readTree(
+                        postLeague(ownerToken, """
+                                {
+                                    "name": "Office League"
+                                }
+                                """).getBody()
+                ).get("id").asText()
+        );
+
+        String memberToken = loginAndGetToken(user.getUsername(), "password123");
+        ResponseEntity<String> response = patchLeague(
+                memberToken,
+                leagueId,
+                """
+                        {
+                            "name": "Renamed League"
+                        }
+                        """
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(leagueRepository.findById(leagueId))
+                .hasValueSatisfying(league ->
+                        assertThat(league.getName()).isEqualTo("Office League")
+                );
+    }
+
+    @Test
+    void ownerCanRemoveMember() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        JsonNode league = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "Office League"
+                        }
+                        """).getBody()
+        );
+        UUID leagueId = UUID.fromString(league.get("id").asText());
+
+        String memberToken = loginAndGetToken(user.getUsername(), "password123");
+        postJoin(memberToken, league.get("joinCode").asText());
+
+        ResponseEntity<String> response = deleteMember(ownerToken, leagueId, user.getId());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(leagueMemberRepository.findByLeagueIdAndUserId(leagueId, user.getId()))
+                .isEmpty();
+        assertThat(leagueMemberRepository.findByLeagueIdAndUserId(leagueId, owner.getId()))
+                .isPresent();
+    }
+
+    @Test
+    void nonOwnerCannotRemoveMember() throws Exception {
+        User owner = createUser("owner-" + UUID.randomUUID());
+        String ownerToken = loginAndGetToken(owner.getUsername(), "password123");
+        JsonNode league = objectMapper.readTree(
+                postLeague(ownerToken, """
+                        {
+                            "name": "Office League"
+                        }
+                        """).getBody()
+        );
+        UUID leagueId = UUID.fromString(league.get("id").asText());
+
+        String memberToken = loginAndGetToken(user.getUsername(), "password123");
+        postJoin(memberToken, league.get("joinCode").asText());
+
+        ResponseEntity<String> response = deleteMember(memberToken, leagueId, owner.getId());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(leagueMemberRepository.findAllByLeagueId(leagueId)).hasSize(2);
+    }
+
     private ResponseEntity<String> postLeague(String token, String requestBody) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -327,6 +531,15 @@ class LeagueControllerIntegrationTest {
                 new HttpEntity<>(requestBody, headers),
                 String.class
         );
+    }
+
+    private List<String> memberUsernames(JsonNode league) {
+        return StreamSupport.stream(
+                        league.get("memberUsernames").spliterator(),
+                        false
+                )
+                .map(JsonNode::asText)
+                .toList();
     }
 
     private ResponseEntity<String> postJoin(String token, String joinCode) {
@@ -351,6 +564,56 @@ class LeagueControllerIntegrationTest {
         );
     }
 
+    private ResponseEntity<String> getLeagues(String token) {
+        HttpHeaders headers = new HttpHeaders();
+
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+
+        return restTemplate.exchange(
+                "/api/leagues",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class
+        );
+    }
+
+    private ResponseEntity<String> getLeague(String token, UUID leagueId) {
+        HttpHeaders headers = new HttpHeaders();
+
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+
+        return restTemplate.exchange(
+                "/api/leagues/" + leagueId,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class
+        );
+    }
+
+    private ResponseEntity<String> patchLeague(
+            String token,
+            UUID leagueId,
+            String requestBody
+    ) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+
+        return restTemplate.exchange(
+                "/api/leagues/" + leagueId,
+                HttpMethod.PATCH,
+                new HttpEntity<>(requestBody, headers),
+                String.class
+        );
+    }
+
     private ResponseEntity<String> deleteMembership(String token, UUID leagueId) {
         HttpHeaders headers = new HttpHeaders();
 
@@ -360,6 +623,25 @@ class LeagueControllerIntegrationTest {
 
         return restTemplate.exchange(
                 "/api/leagues/" + leagueId + "/membership",
+                HttpMethod.DELETE,
+                new HttpEntity<>(headers),
+                String.class
+        );
+    }
+
+    private ResponseEntity<String> deleteMember(
+            String token,
+            UUID leagueId,
+            UUID memberId
+    ) {
+        HttpHeaders headers = new HttpHeaders();
+
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+
+        return restTemplate.exchange(
+                "/api/leagues/" + leagueId + "/members/" + memberId,
                 HttpMethod.DELETE,
                 new HttpEntity<>(headers),
                 String.class

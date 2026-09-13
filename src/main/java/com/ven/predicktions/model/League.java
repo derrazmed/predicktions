@@ -63,6 +63,10 @@ public class League {
         members.add(new LeagueMember(this, user));
     }
 
+    public void updateName(String name) {
+        this.name = name;
+    }
+
     public UUID getId() {
         return id;
     }

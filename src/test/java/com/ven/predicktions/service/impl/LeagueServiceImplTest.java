@@ -3,7 +3,9 @@ package com.ven.predicktions.service.impl;
 import com.ven.predicktions.dto.league.CreateLeagueRequest;
 import com.ven.predicktions.dto.league.JoinLeagueRequest;
 import com.ven.predicktions.dto.league.LeagueResponse;
+import com.ven.predicktions.dto.league.UpdateLeagueRequest;
 import com.ven.predicktions.exception.DuplicateResourceException;
+import com.ven.predicktions.exception.ForbiddenOperationException;
 import com.ven.predicktions.exception.OwnerCannotLeaveException;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.mapper.LeagueMapper;
@@ -23,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -78,6 +81,8 @@ class LeagueServiceImplTest {
                 UUID.randomUUID(),
                 "Office League",
                 userId,
+                1,
+                List.of("owner"),
                 "AB23KLP9",
                 Instant.parse("2026-09-12T20:00:00Z")
         );
@@ -87,7 +92,9 @@ class LeagueServiceImplTest {
         when(leagueRepository.existsByJoinCode("AB23KLP9")).thenReturn(false);
         when(leagueRepository.save(any(League.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(leagueMapper.toResponse(any(League.class))).thenReturn(expectedResponse);
+        when(leagueMemberRepository.findAllByLeagueId(null)).thenReturn(List.of());
+        when(leagueMapper.toResponse(any(League.class), org.mockito.ArgumentMatchers.eq(0L), org.mockito.ArgumentMatchers.eq(List.of())))
+                .thenReturn(expectedResponse);
 
         LeagueResponse response = leagueService.createLeague(userId, request);
 
@@ -111,6 +118,8 @@ class LeagueServiceImplTest {
                 UUID.randomUUID(),
                 "Retry League",
                 userId,
+                1,
+                List.of("owner"),
                 "FREECODE",
                 Instant.parse("2026-09-12T20:00:00Z")
         );
@@ -121,7 +130,9 @@ class LeagueServiceImplTest {
         when(leagueRepository.existsByJoinCode("FREECODE")).thenReturn(false);
         when(leagueRepository.save(any(League.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(leagueMapper.toResponse(any(League.class))).thenReturn(expectedResponse);
+        when(leagueMemberRepository.findAllByLeagueId(null)).thenReturn(List.of());
+        when(leagueMapper.toResponse(any(League.class), org.mockito.ArgumentMatchers.eq(0L), org.mockito.ArgumentMatchers.eq(List.of())))
+                .thenReturn(expectedResponse);
 
         leagueService.createLeague(userId, request);
 
@@ -173,6 +184,8 @@ class LeagueServiceImplTest {
                 leagueId,
                 "Office League",
                 userId,
+                2,
+                List.of("owner", "member"),
                 "AB23KLP9",
                 Instant.parse("2026-09-12T20:00:00Z")
         );
@@ -181,7 +194,10 @@ class LeagueServiceImplTest {
         when(leagueRepository.findByJoinCode("AB23KLP9")).thenReturn(Optional.of(league));
         when(leagueMemberRepository.existsByLeagueIdAndUserId(leagueId, memberId))
                 .thenReturn(false);
-        when(leagueMapper.toResponse(league)).thenReturn(expectedResponse);
+        when(leagueMemberRepository.findAllByLeagueId(leagueId))
+                .thenReturn(List.of(new LeagueMember(league, owner), new LeagueMember(league, member)));
+        when(leagueMapper.toResponse(league, 2L, List.of("owner", "member")))
+                .thenReturn(expectedResponse);
 
         LeagueResponse response = leagueService.joinLeague(
                 memberId,
@@ -289,4 +305,177 @@ class LeagueServiceImplTest {
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Membership not found");
     }
+
+    @Test
+    void getLeaguesForUser_returnsMembershipLeagues() {
+        UUID leagueId = UUID.randomUUID();
+        League league = new League("Office League", owner, "AB23KLP9");
+        ReflectionTestUtils.setField(league, "id", leagueId);
+        LeagueMember membership = new LeagueMember(league, owner);
+        LeagueResponse expectedResponse = new LeagueResponse(
+                leagueId,
+                "Office League",
+                userId,
+                1,
+                List.of("owner"),
+                "AB23KLP9",
+                Instant.parse("2026-09-12T20:00:00Z")
+        );
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(owner));
+        when(leagueMemberRepository.findAllByUserId(userId))
+                .thenReturn(List.of(membership));
+        when(leagueMemberRepository.findAllByLeagueId(leagueId))
+                .thenReturn(List.of(membership));
+        when(leagueMapper.toResponse(league, 1L, List.of("owner")))
+                .thenReturn(expectedResponse);
+
+        List<LeagueResponse> response = leagueService.getLeaguesForUser(userId);
+
+        assertThat(response).containsExactly(expectedResponse);
+    }
+
+    @Test
+    void getLeague_returnsLeagueForMember() {
+        UUID leagueId = UUID.randomUUID();
+        League league = new League("Office League", owner, "AB23KLP9");
+        ReflectionTestUtils.setField(league, "id", leagueId);
+        LeagueResponse expectedResponse = new LeagueResponse(
+                leagueId,
+                "Office League",
+                userId,
+                1,
+                List.of("owner"),
+                "AB23KLP9",
+                Instant.parse("2026-09-12T20:00:00Z")
+        );
+
+        when(leagueRepository.findById(leagueId)).thenReturn(Optional.of(league));
+        when(leagueMemberRepository.existsByLeagueIdAndUserId(leagueId, userId))
+                .thenReturn(true);
+        when(leagueMemberRepository.findAllByLeagueId(leagueId))
+                .thenReturn(List.of(new LeagueMember(league, owner)));
+        when(leagueMapper.toResponse(league, 1L, List.of("owner")))
+                .thenReturn(expectedResponse);
+
+        LeagueResponse response = leagueService.getLeague(userId, leagueId);
+
+        assertThat(response).isEqualTo(expectedResponse);
+    }
+
+    @Test
+    void getLeague_rejectsNonMember() {
+        UUID nonMemberId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+        League league = new League("Office League", owner, "AB23KLP9");
+        ReflectionTestUtils.setField(league, "id", leagueId);
+
+        when(leagueRepository.findById(leagueId)).thenReturn(Optional.of(league));
+        when(leagueMemberRepository.existsByLeagueIdAndUserId(leagueId, nonMemberId))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> leagueService.getLeague(nonMemberId, leagueId))
+                .isInstanceOf(ForbiddenOperationException.class)
+                .hasMessage("User is not a member of this league");
+    }
+
+    @Test
+    void updateLeague_updatesNameForOwner() {
+        UUID leagueId = UUID.randomUUID();
+        League league = new League("Office League", owner, "AB23KLP9");
+        ReflectionTestUtils.setField(league, "id", leagueId);
+        LeagueResponse expectedResponse = new LeagueResponse(
+                leagueId,
+                "Renamed League",
+                userId,
+                1,
+                List.of("owner"),
+                "AB23KLP9",
+                Instant.parse("2026-09-12T20:00:00Z")
+        );
+
+        when(leagueRepository.findById(leagueId)).thenReturn(Optional.of(league));
+        when(leagueMemberRepository.findAllByLeagueId(leagueId))
+                .thenReturn(List.of(new LeagueMember(league, owner)));
+        when(leagueMapper.toResponse(league, 1L, List.of("owner")))
+                .thenReturn(expectedResponse);
+
+        LeagueResponse response = leagueService.updateLeague(
+                userId,
+                leagueId,
+                new UpdateLeagueRequest("Renamed League")
+        );
+
+        assertThat(league.getName()).isEqualTo("Renamed League");
+        assertThat(response).isEqualTo(expectedResponse);
+    }
+
+    @Test
+    void updateLeague_rejectsNonOwner() {
+        UUID leagueId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        League league = new League("Office League", owner, "AB23KLP9");
+        ReflectionTestUtils.setField(league, "id", leagueId);
+
+        when(leagueRepository.findById(leagueId)).thenReturn(Optional.of(league));
+
+        assertThatThrownBy(() -> leagueService.updateLeague(
+                memberId,
+                leagueId,
+                new UpdateLeagueRequest("Renamed League")
+        ))
+                .isInstanceOf(ForbiddenOperationException.class)
+                .hasMessage("Only the league owner can perform this operation");
+    }
+
+    @Test
+    void removeMember_removesMemberForOwner() {
+        UUID leagueId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        League league = new League("Office League", owner, "AB23KLP9");
+        ReflectionTestUtils.setField(league, "id", leagueId);
+        User member = new User("member", "member@example.com", "hashed-password");
+        ReflectionTestUtils.setField(member, "id", memberId);
+        LeagueMember membership = new LeagueMember(league, member);
+
+        when(leagueRepository.findById(leagueId)).thenReturn(Optional.of(league));
+        when(leagueMemberRepository.findByLeagueIdAndUserId(leagueId, memberId))
+                .thenReturn(Optional.of(membership));
+
+        leagueService.removeMember(userId, leagueId, memberId);
+
+        verify(leagueMemberRepository).delete(membership);
+    }
+
+    @Test
+    void removeMember_rejectsNonOwner() {
+        UUID leagueId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        League league = new League("Office League", owner, "AB23KLP9");
+        ReflectionTestUtils.setField(league, "id", leagueId);
+
+        when(leagueRepository.findById(leagueId)).thenReturn(Optional.of(league));
+
+        assertThatThrownBy(() -> leagueService.removeMember(memberId, leagueId, userId))
+                .isInstanceOf(ForbiddenOperationException.class)
+                .hasMessage("Only the league owner can perform this operation");
+
+        verify(leagueMemberRepository, never()).delete(any(LeagueMember.class));
+    }
+
+    @Test
+    void removeMember_rejectsRemovingOwner() {
+        UUID leagueId = UUID.randomUUID();
+        League league = new League("Office League", owner, "AB23KLP9");
+        ReflectionTestUtils.setField(league, "id", leagueId);
+
+        when(leagueRepository.findById(leagueId)).thenReturn(Optional.of(league));
+
+        assertThatThrownBy(() -> leagueService.removeMember(userId, leagueId, userId))
+                .isInstanceOf(OwnerCannotLeaveException.class)
+                .hasMessage("League owner cannot be removed from the league");
+
+        verify(leagueMemberRepository, never()).delete(any(LeagueMember.class));
+    }
 }
+

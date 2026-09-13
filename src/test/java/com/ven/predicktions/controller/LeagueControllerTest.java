@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ven.predicktions.dto.league.CreateLeagueRequest;
 import com.ven.predicktions.dto.league.JoinLeagueRequest;
 import com.ven.predicktions.dto.league.LeagueResponse;
+import com.ven.predicktions.dto.league.UpdateLeagueRequest;
 import com.ven.predicktions.exception.DuplicateResourceException;
+import com.ven.predicktions.exception.ForbiddenOperationException;
 import com.ven.predicktions.exception.GlobalExceptionHandler;
 import com.ven.predicktions.exception.OwnerCannotLeaveException;
 import com.ven.predicktions.exception.ResourceNotFoundException;
@@ -23,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -33,6 +36,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -62,6 +67,8 @@ class LeagueControllerTest {
                 leagueId,
                 "Office League",
                 userId,
+                1,
+                List.of("owner"),
                 "AB23KLP9",
                 Instant.parse("2026-09-12T20:00:00Z")
         );
@@ -127,6 +134,8 @@ class LeagueControllerTest {
                 leagueId,
                 "Office League",
                 UUID.randomUUID(),
+                2,
+                List.of("owner", "member"),
                 "AB23KLP9",
                 Instant.parse("2026-09-12T20:00:00Z")
         );
@@ -267,6 +276,203 @@ class LeagueControllerTest {
                 .andExpect(jsonPath("$.message").value(
                         "League owner cannot leave the league"
                 ));
+    }
+
+    @Test
+    void shouldRetrieveLeaguesForAuthenticatedUser() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+        LeagueResponse response = new LeagueResponse(
+                leagueId,
+                "Office League",
+                userId,
+                2,
+                List.of("owner", "member"),
+                "AB23KLP9",
+                Instant.parse("2026-09-12T20:00:00Z")
+        );
+
+        when(leagueService.getLeaguesForUser(userId)).thenReturn(List.of(response));
+
+        mockMvc.perform(
+                        get("/api/leagues")
+                                .with(authentication(userId))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(leagueId.toString()))
+                .andExpect(jsonPath("$[0].name").value("Office League"))
+                .andExpect(jsonPath("$[0].ownerId").value(userId.toString()))
+                .andExpect(jsonPath("$[0].memberCount").value(2))
+                .andExpect(jsonPath("$[0].memberUsernames[0]").value("owner"))
+                .andExpect(jsonPath("$[0].memberUsernames[1]").value("member"))
+                .andExpect(jsonPath("$[0].joinCode").value("AB23KLP9"));
+    }
+
+    @Test
+    void shouldRetrieveLeagueDetailsForMember() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+        LeagueResponse response = new LeagueResponse(
+                leagueId,
+                "Office League",
+                userId,
+                2,
+                List.of("owner", "member"),
+                "AB23KLP9",
+                Instant.parse("2026-09-12T20:00:00Z")
+        );
+
+        when(leagueService.getLeague(userId, leagueId)).thenReturn(response);
+
+        mockMvc.perform(
+                        get("/api/leagues/{leagueId}", leagueId)
+                                .with(authentication(userId))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(leagueId.toString()))
+                .andExpect(jsonPath("$.memberCount").value(2))
+                .andExpect(jsonPath("$.memberUsernames[0]").value("owner"))
+                .andExpect(jsonPath("$.memberUsernames[1]").value("member"));
+    }
+
+    @Test
+    void shouldRejectLeagueDetailsForNonMember() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+
+        when(leagueService.getLeague(userId, leagueId))
+                .thenThrow(new ForbiddenOperationException(
+                        "User is not a member of this league"
+                ));
+
+        mockMvc.perform(
+                        get("/api/leagues/{leagueId}", leagueId)
+                                .with(authentication(userId))
+                )
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN"));
+    }
+
+    @Test
+    void shouldUpdateLeagueNameForOwner() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+        UpdateLeagueRequest request = new UpdateLeagueRequest("Renamed League");
+        LeagueResponse response = new LeagueResponse(
+                leagueId,
+                "Renamed League",
+                userId,
+                2,
+                List.of("owner", "member"),
+                "AB23KLP9",
+                Instant.parse("2026-09-12T20:00:00Z")
+        );
+
+        when(leagueService.updateLeague(
+                eq(userId),
+                eq(leagueId),
+                any(UpdateLeagueRequest.class)
+        )).thenReturn(response);
+
+        mockMvc.perform(
+                        patch("/api/leagues/{leagueId}", leagueId)
+                                .with(authentication(userId))
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Renamed League"));
+    }
+
+    @Test
+    void shouldRejectInvalidLeagueUpdateName() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+        UpdateLeagueRequest request = new UpdateLeagueRequest("ab");
+
+        mockMvc.perform(
+                        patch("/api/leagues/{leagueId}", leagueId)
+                                .with(authentication(userId))
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
+
+        verify(leagueService, never()).updateLeague(any(), any(), any());
+    }
+
+    @Test
+    void shouldRejectLeagueUpdateForNonOwner() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+
+        when(leagueService.updateLeague(
+                eq(userId),
+                eq(leagueId),
+                any(UpdateLeagueRequest.class)
+        )).thenThrow(new ForbiddenOperationException(
+                "Only the league owner can perform this operation"
+        ));
+
+        mockMvc.perform(
+                        patch("/api/leagues/{leagueId}", leagueId)
+                                .with(authentication(userId))
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(
+                                        new UpdateLeagueRequest("Renamed League")
+                                ))
+                )
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN"));
+    }
+
+    @Test
+    void shouldRemoveMemberForOwner() throws Exception {
+        UUID ownerId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+
+        mockMvc.perform(
+                        delete(
+                                "/api/leagues/{leagueId}/members/{memberId}",
+                                leagueId,
+                                memberId
+                        )
+                                .with(authentication(ownerId))
+                                .with(csrf())
+                )
+                .andExpect(status().isNoContent());
+
+        verify(leagueService).removeMember(ownerId, leagueId, memberId);
+    }
+
+    @Test
+    void shouldRejectRemoveMemberForNonOwner() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID leagueId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+
+        doThrow(new ForbiddenOperationException(
+                "Only the league owner can perform this operation"
+        ))
+                .when(leagueService)
+                .removeMember(userId, leagueId, memberId);
+
+        mockMvc.perform(
+                        delete(
+                                "/api/leagues/{leagueId}/members/{memberId}",
+                                leagueId,
+                                memberId
+                        )
+                                .with(authentication(userId))
+                                .with(csrf())
+                )
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN"));
     }
 
     private RequestPostProcessor authentication(UUID userId) {
