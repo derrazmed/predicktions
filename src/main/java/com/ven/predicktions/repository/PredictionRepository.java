@@ -3,6 +3,7 @@ package com.ven.predicktions.repository;
 import com.ven.predicktions.model.Prediction;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,4 +24,18 @@ public interface PredictionRepository extends JpaRepository<Prediction, UUID> {
         ORDER BY COALESCE(SUM(p.points), 0) DESC, p.user.username ASC
     """)
     List<Object[]> findGlobalLeaderboard();
+
+    @Query("""
+        SELECT
+            u.id,
+            u.username,
+            COALESCE(SUM(p.points), 0)
+        FROM LeagueMember lm
+        JOIN lm.user u
+        LEFT JOIN Prediction p ON p.user.id = u.id
+        WHERE lm.league.id = :leagueId
+        GROUP BY u.id, u.username
+        ORDER BY COALESCE(SUM(p.points), 0) DESC
+    """)
+    List<Object[]> findLeagueLeaderboard(@Param("leagueId") UUID leagueId);
 }

@@ -1,6 +1,8 @@
 package com.ven.predicktions.service.impl;
 
 import com.ven.predicktions.dto.leaderboard.LeaderboardEntryResponse;
+import com.ven.predicktions.repository.LeagueMemberRepository;
+import com.ven.predicktions.repository.LeagueRepository;
 import com.ven.predicktions.repository.PredictionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,12 +22,18 @@ class LeaderboardServiceImplTest {
     @Mock
     private PredictionRepository predictionRepository;
 
+    @Mock
+    private LeagueRepository leagueRepository;
+
+    @Mock
+    private LeagueMemberRepository leagueMemberRepository;
+
     private LeaderboardServiceImpl leaderboardService;
 
     @BeforeEach
     void setUp() {
         leaderboardService =
-                new LeaderboardServiceImpl(predictionRepository);
+                new LeaderboardServiceImpl(predictionRepository, leagueRepository, leagueMemberRepository);
     }
 
     @Test
