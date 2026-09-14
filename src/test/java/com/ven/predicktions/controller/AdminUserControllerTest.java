@@ -12,6 +12,9 @@ import com.ven.predicktions.security.JwtAuthenticationFilter;
 import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.config.SecurityConfig;
 import com.ven.predicktions.service.AdminUserService;
+import com.ven.predicktions.service.AdminPredictionService;
+import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
+import com.ven.predicktions.dto.prediction.AdminPredictionResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -41,6 +44,9 @@ class AdminUserControllerTest {
 
     @MockitoBean
     private AdminUserService adminUserService;
+
+    @MockitoBean
+    private AdminPredictionService adminPredictionService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -260,6 +266,86 @@ class AdminUserControllerTest {
         mockMvc.perform(patch(path).contentType("application/json")
                         .content("{\"enabled\":false}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldReturnUserPredictionHistoryForAdmin() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID predictionId = UUID.randomUUID();
+        UUID matchId = UUID.randomUUID();
+        when(adminPredictionService.getUserPredictions(userId, 0, 20))
+                .thenReturn(new AdminPredictionPageResponse(
+                        List.of(new AdminPredictionResponse(
+                                predictionId, userId, "testuser", matchId, 3,
+                                2, 1, 3,
+                                Instant.parse("2026-09-13T10:30:00Z"),
+                                Instant.parse("2026-09-13T10:30:00Z")
+                        )),
+                        0, 20, 1, 1
+                ));
+
+        mockMvc.perform(get("/api/admin/users/" + userId + "/predictions")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(predictionId.toString()))
+                .andExpect(jsonPath("$.content[0].userId").value(userId.toString()))
+                .andExpect(jsonPath("$.content[0].username").value("testuser"))
+                .andExpect(jsonPath("$.content[0].matchId").value(matchId.toString()))
+                .andExpect(jsonPath("$.content[0].passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.content[0].token").doesNotExist());
+    }
+
+    @Test
+    void shouldRejectUserPredictionHistoryForUserAndUnauthenticatedCaller()
+            throws Exception {
+        String path = "/api/admin/users/" + UUID.randomUUID() + "/predictions";
+
+        mockMvc.perform(get(path).with(adminAuthentication(Role.USER)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(path))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldPassUserPredictionHistoryPaginationToService() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(adminPredictionService.getUserPredictions(userId, 2, 10))
+                .thenReturn(new AdminPredictionPageResponse(
+                        List.of(), 2, 10, 0, 0
+                ));
+
+        mockMvc.perform(get("/api/admin/users/" + userId + "/predictions?page=2&size=10")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.size").value(10));
+    }
+
+    @Test
+    void shouldReturnEmptyHistoryForExistingUserWithoutPredictions() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(adminPredictionService.getUserPredictions(userId, 0, 20))
+                .thenReturn(new AdminPredictionPageResponse(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/api/admin/users/" + userId + "/predictions")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0));
+    }
+
+    @Test
+    void shouldReturnNotFoundForUnknownUserPredictionHistory() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(adminPredictionService.getUserPredictions(userId, 0, 20))
+                .thenThrow(new ResourceNotFoundException("User not found"));
+
+        mockMvc.perform(get("/api/admin/users/" + userId + "/predictions")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
 
     private RequestPostProcessor

@@ -5,6 +5,8 @@ import com.ven.predicktions.dto.user.AdminUserDetailsResponse;
 import com.ven.predicktions.dto.user.AdminUserResponse;
 import com.ven.predicktions.dto.user.ChangeUserRoleRequest;
 import com.ven.predicktions.dto.user.ChangeUserStatusRequest;
+import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
+import com.ven.predicktions.service.AdminPredictionService;
 import com.ven.predicktions.service.AdminUserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,9 +25,14 @@ import java.util.UUID;
 public class AdminUserController {
 
     private final AdminUserService adminUserService;
+    private final AdminPredictionService adminPredictionService;
 
-    public AdminUserController(AdminUserService adminUserService) {
+    public AdminUserController(
+            AdminUserService adminUserService,
+            AdminPredictionService adminPredictionService
+    ) {
         this.adminUserService = adminUserService;
+        this.adminPredictionService = adminPredictionService;
     }
 
     @GetMapping
@@ -41,6 +48,17 @@ public class AdminUserController {
             @PathVariable UUID userId
     ) {
         return ResponseEntity.ok(adminUserService.getUser(userId));
+    }
+
+    @GetMapping("/{userId}/predictions")
+    public ResponseEntity<AdminPredictionPageResponse> getUserPredictions(
+            @PathVariable UUID userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(
+                adminPredictionService.getUserPredictions(userId, page, size)
+        );
     }
 
     @PatchMapping("/{userId}/role")

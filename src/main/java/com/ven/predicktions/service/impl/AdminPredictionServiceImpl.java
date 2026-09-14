@@ -4,7 +4,9 @@ import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionResponse;
 import com.ven.predicktions.model.Prediction;
 import com.ven.predicktions.repository.PredictionRepository;
+import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.service.AdminPredictionService;
+import com.ven.predicktions.exception.ResourceNotFoundException;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -28,9 +30,30 @@ public class AdminPredictionServiceImpl implements AdminPredictionService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final PredictionRepository predictionRepository;
+    private final UserRepository userRepository;
 
-    public AdminPredictionServiceImpl(PredictionRepository predictionRepository) {
+    public AdminPredictionServiceImpl(
+            PredictionRepository predictionRepository,
+            UserRepository userRepository
+    ) {
         this.predictionRepository = predictionRepository;
+        this.userRepository = userRepository;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AdminPredictionPageResponse getUserPredictions(
+            UUID userId,
+            int page,
+            int size
+    ) {
+        if (!userRepository.existsById(userId)) {
+            throw new ResourceNotFoundException("User not found");
+        }
+
+        return getPredictions(
+                userId, null, null, null, null, null, page, size
+        );
     }
 
     @Override
