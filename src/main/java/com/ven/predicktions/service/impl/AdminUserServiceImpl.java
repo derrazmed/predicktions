@@ -5,6 +5,8 @@ import com.ven.predicktions.dto.user.AdminUserDetailsResponse;
 import com.ven.predicktions.dto.user.AdminLeagueSummary;
 import com.ven.predicktions.dto.user.AdminUserResponse;
 import com.ven.predicktions.exception.ResourceNotFoundException;
+import com.ven.predicktions.exception.LastAdministratorException;
+import com.ven.predicktions.model.Role;
 import com.ven.predicktions.model.User;
 import com.ven.predicktions.repository.LeagueMemberRepository;
 import com.ven.predicktions.repository.PredictionRepository;
@@ -15,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -74,6 +77,25 @@ public class AdminUserServiceImpl implements AdminUserService {
                 leagues,
                 leaderboardPosition
         );
+    }
+
+    @Override
+    @Transactional
+    public AdminUserResponse changeUserRole(UUID userId, Role role) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (user.getRole() == Role.ADMIN && role == Role.USER) {
+            if (userRepository.findAllByRoleForUpdate(Role.ADMIN).size() <= 1) {
+                throw new LastAdministratorException();
+            }
+        }
+
+        if (user.getRole() != role) {
+            user.changeRole(role);
+        }
+
+        return toResponse(user);
     }
 
     @Override

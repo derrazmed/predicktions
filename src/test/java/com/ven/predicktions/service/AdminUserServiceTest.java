@@ -2,6 +2,7 @@ package com.ven.predicktions.service;
 
 import com.ven.predicktions.dto.user.AdminUserPageResponse;
 import com.ven.predicktions.dto.user.AdminUserDetailsResponse;
+import com.ven.predicktions.dto.user.AdminUserResponse;
 import com.ven.predicktions.dto.leaderboard.LeaderboardEntryResponse;
 import com.ven.predicktions.model.Role;
 import com.ven.predicktions.model.User;
@@ -21,6 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -106,5 +108,66 @@ class AdminUserServiceTest {
         assertThat(response.points()).isEqualTo(127);
         assertThat(response.leaderboardPosition()).isEqualTo(8);
         assertThat(response.leagues()).isEmpty();
+    }
+
+    @Test
+    void shouldPromoteUserToAdmin() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("user", "user@example.com", "hash", Role.USER);
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+
+        AdminUserResponse response = service().changeUserRole(userId, Role.ADMIN);
+
+        assertThat(user.getRole()).isEqualTo(Role.ADMIN);
+        assertThat(response.role()).isEqualTo(Role.ADMIN);
+    }
+
+    @Test
+    void shouldDemoteAdminWhenAnotherAdminExists() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("admin", "admin@example.com", "hash", Role.ADMIN);
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+        when(userRepository.findAllByRoleForUpdate(Role.ADMIN))
+                .thenReturn(List.of(user, new User("other", "other@example.com", "hash", Role.ADMIN)));
+
+        service().changeUserRole(userId, Role.USER);
+
+        assertThat(user.getRole()).isEqualTo(Role.USER);
+    }
+
+    @Test
+    void shouldRejectDemotionOfLastAdmin() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("admin", "admin@example.com", "hash", Role.ADMIN);
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+        when(userRepository.findAllByRoleForUpdate(Role.ADMIN)).thenReturn(List.of(user));
+
+        assertThrows(
+                com.ven.predicktions.exception.LastAdministratorException.class,
+                () -> service().changeUserRole(userId, Role.USER)
+        );
+
+        assertThat(user.getRole()).isEqualTo(Role.ADMIN);
+    }
+
+    @Test
+    void shouldTreatSameRoleAsNoOp() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("admin", "admin@example.com", "hash", Role.ADMIN);
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+
+        service().changeUserRole(userId, Role.ADMIN);
+
+        verify(userRepository, org.mockito.Mockito.never())
+                .findAllByRoleForUpdate(Role.ADMIN);
+    }
+
+    private AdminUserServiceImpl service() {
+        return new AdminUserServiceImpl(
+                userRepository,
+                predictionRepository,
+                leagueMemberRepository,
+                leaderboardService
+        );
     }
 }

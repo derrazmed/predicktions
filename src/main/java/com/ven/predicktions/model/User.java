@@ -96,6 +96,10 @@ public class User {
         role = Role.ADMIN;
     }
 
+    public void changeRole(Role role) {
+        this.role = role;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }

@@ -51,3 +51,28 @@ returns `404 Not Found`.
 The response contains account information, prediction count, total points,
 current league summaries, and the global leaderboard position. It uses the
 same leaderboard ranking and tie behavior as the global leaderboard endpoint.
+
+## Change user role
+
+```http
+PATCH /api/admin/users/{userId}/role
+Content-Type: application/json
+```
+
+Example request:
+
+```json
+{
+  "role": "ADMIN"
+}
+```
+
+Only authenticated `ADMIN` users can perform this operation. Valid roles are
+`USER` and `ADMIN`; role changes are idempotent. Unauthenticated requests
+return `401 Unauthorized` and authenticated non-admin users return
+`403 Forbidden`.
+
+The final administrator cannot be demoted. Attempts to submit an unknown,
+missing, or null role return `400 Bad Request`. Unknown user IDs return
+`404 Not Found`. The response is the safe user representation and never
+contains passwords, password hashes, tokens, or credentials.
