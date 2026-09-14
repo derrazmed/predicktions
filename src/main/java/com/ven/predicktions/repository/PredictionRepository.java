@@ -13,6 +13,15 @@ public interface PredictionRepository extends JpaRepository<Prediction, UUID> {
 
     List<Prediction> findAllByUserId(UUID userId);
 
+    long countByUserId(UUID userId);
+
+    @Query("""
+        SELECT COALESCE(SUM(p.points), 0)
+        FROM Prediction p
+        WHERE p.user.id = :userId
+    """)
+    long sumPointsByUserId(@Param("userId") UUID userId);
+
     Optional<Prediction> findByUserIdAndMatchId(UUID userId, UUID matchId);
 
     List<Prediction> findAllByMatchId(UUID matchId);

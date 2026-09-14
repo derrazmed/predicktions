@@ -37,3 +37,17 @@ are never included.
 
 `page` is zero-based. `size` defaults to `20` and is limited to `100`.
 Users are ordered by newest registration first.
+
+## User details
+
+```http
+GET /api/admin/users/{userId}
+```
+
+Requires the `ADMIN` role. Missing authentication returns `401 Unauthorized`,
+authenticated non-admin users receive `403 Forbidden`, and an unknown UUID
+returns `404 Not Found`.
+
+The response contains account information, prediction count, total points,
+current league summaries, and the global leaderboard position. It uses the
+same leaderboard ranking and tie behavior as the global leaderboard endpoint.
