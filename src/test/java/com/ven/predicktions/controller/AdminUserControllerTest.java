@@ -1,0 +1,112 @@
+package com.ven.predicktions.controller;
+
+import com.ven.predicktions.dto.user.AdminUserPageResponse;
+import com.ven.predicktions.dto.user.AdminUserResponse;
+import com.ven.predicktions.exception.GlobalExceptionHandler;
+import com.ven.predicktions.model.Role;
+import com.ven.predicktions.security.JwtService;
+import com.ven.predicktions.security.JwtAuthenticationFilter;
+import com.ven.predicktions.config.SecurityConfig;
+import com.ven.predicktions.service.AdminUserService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(AdminUserController.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class})
+class AdminUserControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private AdminUserService adminUserService;
+
+    @MockitoBean
+    private JwtService jwtService;
+
+    @Test
+    void shouldReturnUsersForAdminWithoutSensitiveFields() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(adminUserService.getUsers(0, 20))
+                .thenReturn(new AdminUserPageResponse(
+                        List.of(new AdminUserResponse(
+                                id,
+                                "testuser",
+                                "test@example.com",
+                                Role.USER,
+                                Instant.parse("2026-09-12T23:24:18.470425Z"),
+                                true
+                        )),
+                        0,
+                        20,
+                        1,
+                        1
+                ));
+
+        mockMvc.perform(get("/api/admin/users")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(id.toString()))
+                .andExpect(jsonPath("$.content[0].username").value("testuser"))
+                .andExpect(jsonPath("$.content[0].email").value("test@example.com"))
+                .andExpect(jsonPath("$.content[0].role").value("USER"))
+                .andExpect(jsonPath("$.content[0].enabled").value(true))
+                .andExpect(jsonPath("$.content[0].password").doesNotExist())
+                .andExpect(jsonPath("$.content[0].passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.content[0].accessToken").doesNotExist())
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void shouldRejectUser() throws Exception {
+        mockMvc.perform(get("/api/admin/users")
+                        .with(adminAuthentication(Role.USER)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldRejectUnauthenticatedRequest() throws Exception {
+        mockMvc.perform(get("/api/admin/users"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldPassRequestedPaginationToService() throws Exception {
+        when(adminUserService.getUsers(2, 10))
+                .thenReturn(new AdminUserPageResponse(List.of(), 2, 10, 0, 0));
+
+        mockMvc.perform(get("/api/admin/users?page=2&size=10")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.size").value(10));
+    }
+
+    private RequestPostProcessor
+    adminAuthentication(Role role) {
+        return SecurityMockMvcRequestPostProcessors.authentication(
+                new UsernamePasswordAuthenticationToken(
+                        UUID.randomUUID(),
+                        null,
+                        AuthorityUtils.createAuthorityList("ROLE_" + role.name())
+                )
+        );
+    }
+}

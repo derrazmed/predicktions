@@ -32,6 +32,9 @@ public class User {
     @Column(nullable = false, length = 20)
     private Role role;
 
+    @Column(nullable = false)
+    private boolean enabled;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -62,6 +65,7 @@ public class User {
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role;
+        this.enabled = true;
     }
 
     public UUID getId() {
@@ -82,6 +86,10 @@ public class User {
 
     public Role getRole() {
         return role;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
     }
 
     public void promoteToAdmin() {
