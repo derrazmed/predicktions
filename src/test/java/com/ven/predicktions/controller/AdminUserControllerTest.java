@@ -9,6 +9,7 @@ import com.ven.predicktions.exception.GlobalExceptionHandler;
 import com.ven.predicktions.model.Role;
 import com.ven.predicktions.security.JwtService;
 import com.ven.predicktions.security.JwtAuthenticationFilter;
+import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.config.SecurityConfig;
 import com.ven.predicktions.service.AdminUserService;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,9 @@ class AdminUserControllerTest {
 
     @MockitoBean
     private JwtService jwtService;
+
+    @MockitoBean
+    private UserRepository userRepository;
 
     @Test
     void shouldReturnUsersForAdminWithoutSensitiveFields() throws Exception {
@@ -208,6 +212,54 @@ class AdminUserControllerTest {
                         .content("{\"role\":null}")
                         .with(adminAuthentication(Role.ADMIN)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldChangeUserStatusForAdminWithoutSensitiveFields() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(adminUserService.setUserEnabled(id, false))
+                .thenReturn(new AdminUserResponse(
+                        id, "testuser", "test@example.com", Role.USER,
+                        Instant.parse("2026-09-12T23:24:18.470425Z"), false
+                ));
+
+        mockMvc.perform(patch("/api/admin/users/" + id + "/status")
+                        .contentType("application/json")
+                        .content("{\"enabled\":false}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.token").doesNotExist());
+    }
+
+    @Test
+    void shouldRejectInvalidStatusPayloads() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(patch("/api/admin/users/" + id + "/status")
+                        .contentType("application/json")
+                        .content("{}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/admin/users/" + id + "/status")
+                        .contentType("application/json")
+                        .content("{\"enabled\":null}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldRejectStatusChangeForUserAndUnauthenticatedCaller() throws Exception {
+        String path = "/api/admin/users/" + UUID.randomUUID() + "/status";
+        mockMvc.perform(patch(path).contentType("application/json")
+                        .content("{\"enabled\":false}")
+                        .with(adminAuthentication(Role.USER)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch(path).contentType("application/json")
+                        .content("{\"enabled\":false}"))
+                .andExpect(status().isUnauthorized());
     }
 
     private RequestPostProcessor

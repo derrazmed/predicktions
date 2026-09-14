@@ -4,6 +4,7 @@ import com.ven.predicktions.dto.user.AdminUserPageResponse;
 import com.ven.predicktions.dto.user.AdminUserDetailsResponse;
 import com.ven.predicktions.dto.user.AdminUserResponse;
 import com.ven.predicktions.dto.user.ChangeUserRoleRequest;
+import com.ven.predicktions.dto.user.ChangeUserStatusRequest;
 import com.ven.predicktions.service.AdminUserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,6 +50,16 @@ public class AdminUserController {
     ) {
         return ResponseEntity.ok(
                 adminUserService.changeUserRole(userId, request.role())
+        );
+    }
+
+    @PatchMapping("/{userId}/status")
+    public ResponseEntity<AdminUserResponse> changeUserStatus(
+            @PathVariable UUID userId,
+            @Valid @RequestBody ChangeUserStatusRequest request
+    ) {
+        return ResponseEntity.ok(
+                adminUserService.setUserEnabled(userId, request.enabled())
         );
     }
 }

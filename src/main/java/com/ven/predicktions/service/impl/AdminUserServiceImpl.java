@@ -6,6 +6,7 @@ import com.ven.predicktions.dto.user.AdminLeagueSummary;
 import com.ven.predicktions.dto.user.AdminUserResponse;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.exception.LastAdministratorException;
+import com.ven.predicktions.exception.LastActiveAdministratorException;
 import com.ven.predicktions.model.Role;
 import com.ven.predicktions.model.User;
 import com.ven.predicktions.repository.LeagueMemberRepository;
@@ -95,6 +96,25 @@ public class AdminUserServiceImpl implements AdminUserService {
             user.changeRole(role);
         }
 
+        return toResponse(user);
+    }
+
+    @Override
+    @Transactional
+    public AdminUserResponse setUserEnabled(UUID userId, boolean enabled) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (user.isEnabled() == enabled) {
+            return toResponse(user);
+        }
+
+        if (!enabled && user.getRole() == Role.ADMIN
+                && userRepository.findEnabledByRoleForUpdate(Role.ADMIN).size() <= 1) {
+            throw new LastActiveAdministratorException();
+        }
+
+        user.setEnabled(enabled);
         return toResponse(user);
     }
 

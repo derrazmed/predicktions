@@ -162,6 +162,45 @@ class AdminUserServiceTest {
                 .findAllByRoleForUpdate(Role.ADMIN);
     }
 
+    @Test
+    void shouldDisableUser() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("user", "user@example.com", "hash", Role.USER);
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+
+        AdminUserResponse response = service().setUserEnabled(userId, false);
+
+        assertThat(user.isEnabled()).isFalse();
+        assertThat(response.enabled()).isFalse();
+    }
+
+    @Test
+    void shouldRejectDisablingLastActiveAdmin() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("admin", "admin@example.com", "hash", Role.ADMIN);
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+        when(userRepository.findEnabledByRoleForUpdate(Role.ADMIN))
+                .thenReturn(List.of(user));
+
+        assertThrows(
+                com.ven.predicktions.exception.LastActiveAdministratorException.class,
+                () -> service().setUserEnabled(userId, false)
+        );
+        assertThat(user.isEnabled()).isTrue();
+    }
+
+    @Test
+    void shouldTreatSameEnabledStateAsNoOp() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("user", "user@example.com", "hash", Role.USER);
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+
+        service().setUserEnabled(userId, true);
+
+        verify(userRepository, org.mockito.Mockito.never())
+                .findEnabledByRoleForUpdate(Role.ADMIN);
+    }
+
     private AdminUserServiceImpl service() {
         return new AdminUserServiceImpl(
                 userRepository,
