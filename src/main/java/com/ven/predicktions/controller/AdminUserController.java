@@ -2,13 +2,18 @@ package com.ven.predicktions.controller;
 
 import com.ven.predicktions.dto.user.AdminUserPageResponse;
 import com.ven.predicktions.dto.user.AdminUserDetailsResponse;
+import com.ven.predicktions.dto.user.AdminUserResponse;
+import com.ven.predicktions.dto.user.ChangeUserRoleRequest;
 import com.ven.predicktions.service.AdminUserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 import java.util.UUID;
 
@@ -35,5 +40,15 @@ public class AdminUserController {
             @PathVariable UUID userId
     ) {
         return ResponseEntity.ok(adminUserService.getUser(userId));
+    }
+
+    @PatchMapping("/{userId}/role")
+    public ResponseEntity<AdminUserResponse> changeUserRole(
+            @PathVariable UUID userId,
+            @Valid @RequestBody ChangeUserRoleRequest request
+    ) {
+        return ResponseEntity.ok(
+                adminUserService.changeUserRole(userId, request.role())
+        );
     }
 }

@@ -28,6 +28,7 @@ import java.util.UUID;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AdminUserController.class)
@@ -146,6 +147,67 @@ class AdminUserControllerTest {
                         .with(adminAuthentication(Role.ADMIN)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    void shouldChangeUserRoleForAdmin() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(adminUserService.changeUserRole(id, Role.ADMIN))
+                .thenReturn(new AdminUserResponse(
+                        id,
+                        "testuser",
+                        "test@example.com",
+                        Role.ADMIN,
+                        Instant.parse("2026-09-12T23:24:18.470425Z"),
+                        true
+                ));
+
+        mockMvc.perform(patch("/api/admin/users/" + id + "/role")
+                        .contentType("application/json")
+                        .content("{\"role\":\"ADMIN\"}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("ADMIN"))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.token").doesNotExist());
+    }
+
+    @Test
+    void shouldRejectRoleChangeForUser() throws Exception {
+        mockMvc.perform(patch("/api/admin/users/" + UUID.randomUUID() + "/role")
+                        .contentType("application/json")
+                        .content("{\"role\":\"ADMIN\"}")
+                        .with(adminAuthentication(Role.USER)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldRejectUnauthenticatedRoleChange() throws Exception {
+        mockMvc.perform(patch("/api/admin/users/" + UUID.randomUUID() + "/role")
+                        .contentType("application/json")
+                        .content("{\"role\":\"ADMIN\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldRejectInvalidRolePayloads() throws Exception {
+        mockMvc.perform(patch("/api/admin/users/" + UUID.randomUUID() + "/role")
+                        .contentType("application/json")
+                        .content("{\"role\":\"SUPER_ADMIN\"}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/admin/users/" + UUID.randomUUID() + "/role")
+                        .contentType("application/json")
+                        .content("{}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/admin/users/" + UUID.randomUUID() + "/role")
+                        .contentType("application/json")
+                        .content("{\"role\":null}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isBadRequest());
     }
 
     private RequestPostProcessor
