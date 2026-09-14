@@ -2,6 +2,9 @@ package com.ven.predicktions.controller;
 
 import com.ven.predicktions.dto.user.AdminUserPageResponse;
 import com.ven.predicktions.dto.user.AdminUserResponse;
+import com.ven.predicktions.dto.user.AdminUserDetailsResponse;
+import com.ven.predicktions.dto.user.AdminLeagueSummary;
+import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.exception.GlobalExceptionHandler;
 import com.ven.predicktions.model.Role;
 import com.ven.predicktions.security.JwtService;
@@ -97,6 +100,52 @@ class AdminUserControllerTest {
                 .andExpect(jsonPath("$.content").isEmpty())
                 .andExpect(jsonPath("$.page").value(2))
                 .andExpect(jsonPath("$.size").value(10));
+    }
+
+    @Test
+    void shouldReturnUserDetailsWithoutSensitiveFields() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(adminUserService.getUser(id))
+                .thenReturn(new AdminUserDetailsResponse(
+                        id,
+                        "testuser",
+                        "test@example.com",
+                        Role.USER,
+                        Instant.parse("2026-09-12T23:24:18.470425Z"),
+                        true,
+                        42,
+                        127,
+                        List.of(new AdminLeagueSummary(
+                                UUID.randomUUID(),
+                                "mo3a9in"
+                        )),
+                        8
+                ));
+
+        mockMvc.perform(get("/api/admin/users/" + id)
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.predictionCount").value(42))
+                .andExpect(jsonPath("$.points").value(127))
+                .andExpect(jsonPath("$.leagues[0].name").value("mo3a9in"))
+                .andExpect(jsonPath("$.leaderboardPosition").value(8))
+                .andExpect(jsonPath("$.password").doesNotExist())
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.accessToken").doesNotExist())
+                .andExpect(jsonPath("$.token").doesNotExist());
+    }
+
+    @Test
+    void shouldReturnNotFoundForUnknownUser() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(adminUserService.getUser(id))
+                .thenThrow(new ResourceNotFoundException("User not found"));
+
+        mockMvc.perform(get("/api/admin/users/" + id)
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
 
     private RequestPostProcessor
