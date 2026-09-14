@@ -14,4 +14,6 @@ public interface AdminUserService {
     AdminUserDetailsResponse getUser(UUID userId);
 
     AdminUserResponse changeUserRole(UUID userId, Role role);
+
+    AdminUserResponse setUserEnabled(UUID userId, boolean enabled);
 }

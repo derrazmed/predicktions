@@ -1,6 +1,8 @@
 package com.ven.predicktions.security;
 
 import com.ven.predicktions.model.Role;
+import com.ven.predicktions.model.User;
+import com.ven.predicktions.repository.UserRepository;
 import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -23,6 +26,9 @@ class JwtAuthenticationFilterTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private UserRepository userRepository;
 
     @AfterEach
     void clearSecurityContext() {
@@ -60,14 +66,41 @@ class JwtAuthenticationFilterTest {
         when(jwtService.isValid(token)).thenReturn(true);
         when(jwtService.extractUserId(token)).thenReturn(userId);
         when(jwtService.extractRole(token)).thenReturn(role);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(
+                new User("user", "user@example.com", "hash", role)
+        ));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer " + token);
 
-        new JwtAuthenticationFilter(jwtService).doFilter(
+        new JwtAuthenticationFilter(jwtService, userRepository).doFilter(
                 request,
                 new MockHttpServletResponse(),
                 new MockFilterChain()
         );
+    }
+
+    @Test
+    void shouldRejectDisabledUserToken() throws ServletException, IOException {
+        String token = "signed-token";
+        UUID userId = UUID.randomUUID();
+        when(jwtService.isValid(token)).thenReturn(true);
+        when(jwtService.extractUserId(token)).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(
+                new User("user", "user@example.com", "hash", Role.USER)
+        ));
+
+        User disabledUser = userRepository.findById(userId).orElseThrow();
+        disabledUser.setEnabled(false);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(disabledUser));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer " + token);
+        new JwtAuthenticationFilter(jwtService, userRepository).doFilter(
+                request, new MockHttpServletResponse(), new MockFilterChain()
+        );
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .isNull();
     }
 }

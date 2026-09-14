@@ -76,3 +76,30 @@ The final administrator cannot be demoted. Attempts to submit an unknown,
 missing, or null role return `400 Bad Request`. Unknown user IDs return
 `404 Not Found`. The response is the safe user representation and never
 contains passwords, password hashes, tokens, or credentials.
+
+## Enable or disable a user
+
+```http
+PATCH /api/admin/users/{userId}/status
+Content-Type: application/json
+```
+
+Example:
+
+```json
+{
+  "enabled": false
+}
+```
+
+Only authenticated `ADMIN` users can perform this operation. Missing
+authentication returns `401 Unauthorized`; authenticated non-admin users
+receive `403 Forbidden`. The `enabled` property is required and must be a
+boolean. Disabling an account does not delete its data, but prevents password
+login and invalidates its existing JWT access immediately. Re-enabling restores
+normal authentication.
+
+The last enabled administrator cannot be disabled. Attempts to disable that
+account return `400 Bad Request`; unknown user IDs return `404 Not Found`.
+The response uses the safe admin user representation and never contains
+passwords, tokens, or credentials.

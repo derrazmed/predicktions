@@ -72,6 +72,10 @@ public class AuthServiceImpl implements AuthService {
             throw new BadCredentialsException("Invalid username or password");
         }
 
+        if (!user.isEnabled()) {
+            throw new BadCredentialsException("Invalid username or password");
+        }
+
         String token = jwtService.generateToken(user.getId(), user.getRole());
 
         return new LoginResponse(

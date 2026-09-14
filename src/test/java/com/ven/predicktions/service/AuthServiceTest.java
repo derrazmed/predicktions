@@ -230,6 +230,25 @@ class AuthServiceTest {
     }
 
     @Test
+    void shouldRejectDisabledUserEvenWithCorrectPassword() {
+        LoginRequest request = new LoginRequest("disabled", "password123");
+        User user = new User(
+                "disabled",
+                "disabled@example.com",
+                "hashed-password"
+        );
+        user.setEnabled(false);
+
+        when(userRepository.findByUsername("disabled"))
+                .thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed-password"))
+                .thenReturn(true);
+
+        assertThrows(BadCredentialsException.class, () -> authService.login(request));
+        verify(jwtService, never()).generateToken(any(), any());
+    }
+
+    @Test
     void shouldIssueAdminRoleTokenForAdminUser() {
         LoginRequest request = new LoginRequest(
                 "admin",
