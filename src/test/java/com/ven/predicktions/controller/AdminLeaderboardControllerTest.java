@@ -2,6 +2,7 @@ package com.ven.predicktions.controller;
 
 import com.ven.predicktions.config.SecurityConfig;
 import com.ven.predicktions.dto.leaderboard.LeaderboardEntryResponse;
+import com.ven.predicktions.dto.leaderboard.LeaderboardRecalculationResponse;
 import com.ven.predicktions.exception.GlobalExceptionHandler;
 import com.ven.predicktions.security.JwtAuthenticationFilter;
 import com.ven.predicktions.security.JwtService;
@@ -22,6 +23,7 @@ import java.util.UUID;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -72,6 +74,46 @@ class AdminLeaderboardControllerTest {
                         .with(authentication("ROLE_USER")))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/admin/leaderboard"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldRecalculateGlobalLeaderboardForAdmin() throws Exception {
+        UUID adminId = UUID.randomUUID();
+        when(leaderboardService.recalculateGlobalLeaderboard(adminId))
+                .thenReturn(new LeaderboardRecalculationResponse(
+                        java.time.Instant.parse("2026-09-15T10:30:00Z"),
+                        25,
+                        0,
+                        25,
+                        "Leaderboard recalculated from prediction data."
+                ));
+
+        mockMvc.perform(post("/api/admin/leaderboard/recalculate")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(
+                                new UsernamePasswordAuthenticationToken(
+                                        adminId,
+                                        null,
+                                        AuthorityUtils.createAuthorityList("ROLE_ADMIN")
+                                )
+                        )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usersProcessed").value(25))
+                .andExpect(jsonPath("$.entriesUpdated").value(0))
+                .andExpect(jsonPath("$.entriesUnchanged").value(25))
+                .andExpect(jsonPath("$.message").value(
+                        "Leaderboard recalculated from prediction data."
+                ))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.token").doesNotExist());
+    }
+
+    @Test
+    void shouldRejectLeaderboardRecalculationForUserAndUnauthenticated() throws Exception {
+        mockMvc.perform(post("/api/admin/leaderboard/recalculate")
+                        .with(authentication("ROLE_USER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/admin/leaderboard/recalculate"))
                 .andExpect(status().isUnauthorized());
     }
 
