@@ -50,3 +50,18 @@ Example response:
 
 Unknown leagues return `404 Not Found`; invalid UUIDs return `400 Bad Request`.
 Unauthenticated and non-admin requests return `401` and `403`.
+
+## Delete a league
+
+```http
+DELETE /api/admin/leagues/{leagueId}
+```
+
+This destructive operation requires the `ADMIN` role and returns `204 No
+Content` when the league exists. The league's membership rows are deleted
+before the league row. The owner and all members remain intact, including
+their accounts, predictions, points, and memberships in other leagues.
+Matches, global leaderboard data, point-adjustment history, and unrelated
+leagues are also preserved. A repeated deletion or unknown league returns
+`404 Not Found`; unauthenticated and non-admin requests return `401` and
+`403`.

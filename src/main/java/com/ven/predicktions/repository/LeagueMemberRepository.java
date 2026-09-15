@@ -23,4 +23,6 @@ public interface LeagueMemberRepository extends JpaRepository<LeagueMember, UUID
     boolean existsByLeagueIdAndUserId(UUID leagueId, UUID userId);
 
     long countByLeagueId(UUID leagueId);
+
+    void deleteAllByLeagueId(UUID leagueId);
 }
