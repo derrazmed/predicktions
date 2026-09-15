@@ -8,8 +8,8 @@ import com.ven.predicktions.model.Match;
 import com.ven.predicktions.model.MatchStatus;
 import com.ven.predicktions.model.Prediction;
 import com.ven.predicktions.repository.MatchRepository;
-import com.ven.predicktions.repository.PredictionRepository;
 import com.ven.predicktions.service.AdminMatchService;
+import com.ven.predicktions.service.PredictionRecalculationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
@@ -22,16 +22,16 @@ public class AdminMatchServiceImpl implements AdminMatchService {
 
     private static final Logger log = LoggerFactory.getLogger(AdminMatchServiceImpl.class);
     private final MatchRepository matchRepository;
-    private final PredictionRepository predictionRepository;
+    private final PredictionRecalculationService predictionRecalculationService;
     private final MatchMapper matchMapper;
 
     public AdminMatchServiceImpl(
             MatchRepository matchRepository,
-            PredictionRepository predictionRepository,
+            PredictionRecalculationService predictionRecalculationService,
             MatchMapper matchMapper
     ) {
         this.matchRepository = matchRepository;
-        this.predictionRepository = predictionRepository;
+        this.predictionRecalculationService = predictionRecalculationService;
         this.matchMapper = matchMapper;
     }
 
@@ -57,16 +57,8 @@ public class AdminMatchServiceImpl implements AdminMatchService {
             match.setHomeScore(request.homeScore());
             match.setAwayScore(request.awayScore());
             match.setStatus(MatchStatus.FINISHED);
-            for (Prediction prediction : predictionRepository.findAllByMatchId(matchId)) {
-                prediction.setPoints(calculatePoints(
-                        prediction.getPredictedHomeScore(),
-                        prediction.getPredictedAwayScore(),
-                        request.homeScore(),
-                        request.awayScore()
-                ));
-                predictionRepository.save(prediction);
-            }
             matchRepository.save(match);
+            predictionRecalculationService.recalculate(match, adminId);
         }
 
         log.info("Admin {} corrected match {} result from {}-{} to {}-{}",
@@ -75,19 +67,14 @@ public class AdminMatchServiceImpl implements AdminMatchService {
         return matchMapper.toResponse(match);
     }
 
-    private int calculatePoints(
-            int predictedHome,
-            int predictedAway,
-            int actualHome,
-            int actualAway
+    @Override
+    @Transactional
+    public com.ven.predicktions.dto.match.MatchRecalculationResponse recalculate(
+            UUID matchId,
+            UUID adminId
     ) {
-        if (predictedHome == actualHome && predictedAway == actualAway) {
-            return 3;
-        }
-        if (Integer.signum(predictedHome - predictedAway)
-                == Integer.signum(actualHome - actualAway)) {
-            return 1;
-        }
-        return 0;
+        Match match = matchRepository.findById(matchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Match not found"));
+        return predictionRecalculationService.recalculate(match, adminId);
     }
 }
