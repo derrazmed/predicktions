@@ -61,3 +61,21 @@ Invalid UUIDs, dates, page values, sizes, gameweeks, or a date range where
 
 The response is a dedicated administrative DTO and does not include passwords,
 password hashes, tokens, credentials, or other authentication data.
+
+## Retrieve predictions for a match
+
+```http
+GET /api/admin/matches/{matchId}/predictions?page=0&size=20
+```
+
+This endpoint uses the same administrative response and pagination format as
+the filtered endpoint above, but scopes the result to one match. It requires
+an `ADMIN` JWT. A missing match returns `404 Not Found`; a match with no
+submitted predictions returns an empty `content` array. Pagination is
+zero-based, defaults to `page=0` and `size=20`, and `size` is limited to `100`.
+
+For example:
+
+```http
+GET /api/admin/matches/d73d3337-2d35-4f18-8d43-ad7619d28d9d/predictions?page=0&size=50
+```
