@@ -9,15 +9,20 @@ import com.ven.predicktions.exception.LastAdministratorException;
 import com.ven.predicktions.exception.LastActiveAdministratorException;
 import com.ven.predicktions.model.Role;
 import com.ven.predicktions.model.User;
+import com.ven.predicktions.model.AdminAuditAction;
+import com.ven.predicktions.model.AdminAuditTargetType;
 import com.ven.predicktions.repository.LeagueMemberRepository;
 import com.ven.predicktions.repository.PredictionRepository;
 import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.service.AdminUserService;
 import com.ven.predicktions.service.LeaderboardService;
+import com.ven.predicktions.service.AdminAuditService;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -32,17 +37,27 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final PredictionRepository predictionRepository;
     private final LeagueMemberRepository leagueMemberRepository;
     private final LeaderboardService leaderboardService;
+    private final AdminAuditService auditService;
 
+    @Autowired
     public AdminUserServiceImpl(
             UserRepository userRepository,
             PredictionRepository predictionRepository,
             LeagueMemberRepository leagueMemberRepository,
             LeaderboardService leaderboardService
     ) {
+        this(userRepository, predictionRepository, leagueMemberRepository, leaderboardService, null);
+    }
+    public AdminUserServiceImpl(
+            UserRepository userRepository, PredictionRepository predictionRepository,
+            LeagueMemberRepository leagueMemberRepository, LeaderboardService leaderboardService,
+            AdminAuditService auditService
+    ) {
         this.userRepository = userRepository;
         this.predictionRepository = predictionRepository;
         this.leagueMemberRepository = leagueMemberRepository;
         this.leaderboardService = leaderboardService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -93,7 +108,10 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
 
         if (user.getRole() != role) {
+            Role previous = user.getRole();
             user.changeRole(role);
+            record(AdminAuditAction.ROLE_CHANGED, userId,
+                    "Changed role from " + previous + " to " + role);
         }
 
         return toResponse(user);
@@ -115,7 +133,16 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
 
         user.setEnabled(enabled);
+        record(enabled ? AdminAuditAction.USER_ENABLED : AdminAuditAction.USER_DISABLED,
+                userId, enabled ? "Enabled user account" : "Disabled user account");
         return toResponse(user);
+    }
+
+    private void record(AdminAuditAction action, UUID targetId, String details) {
+        if (auditService != null && SecurityContextHolder.getContext().getAuthentication() != null
+                && SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof UUID adminId) {
+            auditService.record(adminId, action, AdminAuditTargetType.USER, targetId, details);
+        }
     }
 
     @Override

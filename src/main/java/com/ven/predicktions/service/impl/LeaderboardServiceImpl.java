@@ -8,6 +8,9 @@ import com.ven.predicktions.repository.LeagueMemberRepository;
 import com.ven.predicktions.repository.LeagueRepository;
 import com.ven.predicktions.repository.PredictionRepository;
 import com.ven.predicktions.service.LeaderboardService;
+import com.ven.predicktions.service.AdminAuditService;
+import com.ven.predicktions.model.AdminAuditAction;
+import com.ven.predicktions.model.AdminAuditTargetType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +19,7 @@ import java.util.UUID;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 @Transactional(readOnly = true)
@@ -25,11 +29,17 @@ public class LeaderboardServiceImpl implements LeaderboardService {
     private final PredictionRepository predictionRepository;
     private final LeagueRepository leagueRepository;
     private final LeagueMemberRepository leagueMemberRepository;
+    private final AdminAuditService auditService;
 
     public LeaderboardServiceImpl(PredictionRepository predictionRepository, LeagueRepository leagueRepository, LeagueMemberRepository leagueMemberRepository) {
+        this(predictionRepository, leagueRepository, leagueMemberRepository, null);
+    }
+    @Autowired
+    public LeaderboardServiceImpl(PredictionRepository predictionRepository, LeagueRepository leagueRepository, LeagueMemberRepository leagueMemberRepository, AdminAuditService auditService) {
         this.predictionRepository = predictionRepository;
         this.leagueRepository = leagueRepository;
         this.leagueMemberRepository = leagueMemberRepository;
+        this.auditService = auditService;
     }
 
     @Override
@@ -65,13 +75,19 @@ public class LeaderboardServiceImpl implements LeaderboardService {
                 0
         );
 
-        return new LeaderboardRecalculationResponse(
+        LeaderboardRecalculationResponse response = new LeaderboardRecalculationResponse(
                 Instant.now(),
                 usersProcessed,
                 0,
                 usersProcessed,
                 "Leaderboard recalculated from prediction data."
         );
+        if (auditService != null) {
+            auditService.record(adminId, AdminAuditAction.LEADERBOARD_RECALCULATED,
+                    AdminAuditTargetType.LEADERBOARD, null,
+                    "Recalculated global leaderboard: usersProcessed=" + usersProcessed);
+        }
+        return response;
     }
 
     private void validateFilters(Integer gameweek, Integer season) {

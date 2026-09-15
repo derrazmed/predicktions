@@ -6,10 +6,14 @@ import com.ven.predicktions.model.Prediction;
 import com.ven.predicktions.repository.PredictionRepository;
 import com.ven.predicktions.service.PredictionRecalculationService;
 import com.ven.predicktions.service.PredictionScoringService;
+import com.ven.predicktions.service.AdminAuditService;
+import com.ven.predicktions.model.AdminAuditAction;
+import com.ven.predicktions.model.AdminAuditTargetType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -22,13 +26,20 @@ public class PredictionRecalculationServiceImpl implements PredictionRecalculati
 
     private final PredictionRepository predictionRepository;
     private final PredictionScoringService scoringService;
+    private final AdminAuditService auditService;
 
     public PredictionRecalculationServiceImpl(
             PredictionRepository predictionRepository,
             PredictionScoringService scoringService
     ) {
+        this(predictionRepository, scoringService, null);
+    }
+    @Autowired
+    public PredictionRecalculationServiceImpl(PredictionRepository predictionRepository,
+            PredictionScoringService scoringService, AdminAuditService auditService) {
         this.predictionRepository = predictionRepository;
         this.scoringService = scoringService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -50,7 +61,7 @@ public class PredictionRecalculationServiceImpl implements PredictionRecalculati
         log.info("Admin {} recalculated match {} predictions: processed={}, updated={}",
                 adminId, match.getId(), processed, updated);
 
-        return new MatchRecalculationResponse(
+        MatchRecalculationResponse response = new MatchRecalculationResponse(
                 match.getId(),
                 match.getHomeScore(),
                 match.getAwayScore(),
@@ -59,5 +70,12 @@ public class PredictionRecalculationServiceImpl implements PredictionRecalculati
                 processed - updated,
                 Instant.now()
         );
+        if (auditService != null) {
+            auditService.record(adminId, AdminAuditAction.PREDICTIONS_RECALCULATED,
+                    AdminAuditTargetType.MATCH, match.getId(),
+                    "Recalculated predictions: processed=" + processed + ", updated=" + updated +
+                            ", unchanged=" + (processed - updated));
+        }
+        return response;
     }
 }

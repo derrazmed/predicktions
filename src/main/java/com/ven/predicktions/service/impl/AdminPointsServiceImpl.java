@@ -8,6 +8,8 @@ import com.ven.predicktions.dto.user.AdjustmentHistoryFilter;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.model.PointsAdjustment;
 import com.ven.predicktions.model.User;
+import com.ven.predicktions.model.AdminAuditAction;
+import com.ven.predicktions.model.AdminAuditTargetType;
 import com.ven.predicktions.repository.PointsAdjustmentRepository;
 import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.service.AdminPointsService;
@@ -17,6 +19,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.UUID;
 
@@ -27,13 +31,21 @@ public class AdminPointsServiceImpl implements AdminPointsService {
 
     private final UserRepository userRepository;
     private final PointsAdjustmentRepository pointsAdjustmentRepository;
+    private final com.ven.predicktions.service.AdminAuditService auditService;
 
     public AdminPointsServiceImpl(
             UserRepository userRepository,
             PointsAdjustmentRepository pointsAdjustmentRepository
     ) {
+        this(userRepository, pointsAdjustmentRepository, null);
+    }
+    @Autowired
+    public AdminPointsServiceImpl(UserRepository userRepository,
+            PointsAdjustmentRepository pointsAdjustmentRepository,
+            com.ven.predicktions.service.AdminAuditService auditService) {
         this.userRepository = userRepository;
         this.pointsAdjustmentRepository = pointsAdjustmentRepository;
+        this.auditService = auditService;
     }
 
     @Override
@@ -56,6 +68,12 @@ public class AdminPointsServiceImpl implements AdminPointsService {
                         admin
                 )
         );
+        if (auditService != null) {
+            auditService.record(adminUserId, AdminAuditAction.POINTS_ADJUSTED,
+                    AdminAuditTargetType.USER, userId,
+                    "Adjusted points by " + (request.points() >= 0 ? "+" : "") +
+                            request.points() + ": " + request.reason());
+        }
 
         return new PointsAdjustmentResponse(
                 user.getId(),
