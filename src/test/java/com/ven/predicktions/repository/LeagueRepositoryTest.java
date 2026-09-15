@@ -9,6 +9,8 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -155,6 +157,30 @@ class LeagueRepositoryTest {
         assertThatThrownBy(() ->
                 leagueMemberRepository.saveAndFlush(new LeagueMember(league, member))
         ).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void shouldProjectAdministrationDataAndCountMembers() {
+        User owner = createUser("admin-list-owner");
+        User member = createUser("admin-list-member");
+        League league = new League("Administration League", owner, "ADMIN01");
+        league.addMember(member);
+        League saved = leagueRepository.saveAndFlush(league);
+
+        Page<AdminLeagueProjection> page =
+                leagueRepository.findAllForAdministration(PageRequest.of(0, 20));
+
+        AdminLeagueProjection result = page.getContent().stream()
+                .filter(projection -> projection.getId().equals(saved.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(result.getName()).isEqualTo("Administration League");
+        assertThat(result.getOwnerId()).isEqualTo(owner.getId());
+        assertThat(result.getOwnerUsername()).isEqualTo("admin-list-owner");
+        assertThat(result.getMemberCount()).isEqualTo(2);
+        assertThat(result.getJoinCode()).isEqualTo("ADMIN01");
+        assertThat(result.getCreatedAt()).isNotNull();
     }
 
     private User createUser(String username) {
