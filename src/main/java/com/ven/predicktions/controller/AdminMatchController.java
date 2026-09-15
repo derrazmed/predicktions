@@ -2,12 +2,19 @@ package com.ven.predicktions.controller;
 
 import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
 import com.ven.predicktions.service.AdminPredictionService;
+import com.ven.predicktions.service.AdminMatchService;
+import com.ven.predicktions.dto.match.UpdateMatchResultRequest;
+import com.ven.predicktions.dto.match.MatchResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 
 import java.util.UUID;
 
@@ -16,9 +23,14 @@ import java.util.UUID;
 public class AdminMatchController {
 
     private final AdminPredictionService adminPredictionService;
+    private final AdminMatchService adminMatchService;
 
-    public AdminMatchController(AdminPredictionService adminPredictionService) {
+    public AdminMatchController(
+            AdminPredictionService adminPredictionService,
+            AdminMatchService adminMatchService
+    ) {
         this.adminPredictionService = adminPredictionService;
+        this.adminMatchService = adminMatchService;
     }
 
     @GetMapping("/{matchId}/predictions")
@@ -30,5 +42,18 @@ public class AdminMatchController {
         return ResponseEntity.ok(
                 adminPredictionService.getMatchPredictions(matchId, page, size)
         );
+    }
+
+    @PatchMapping("/{matchId}/result")
+    public ResponseEntity<MatchResponse> updateResult(
+            @PathVariable UUID matchId,
+            @Valid @RequestBody UpdateMatchResultRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(adminMatchService.updateResult(
+                matchId,
+                request,
+                (UUID) authentication.getPrincipal()
+        ));
     }
 }

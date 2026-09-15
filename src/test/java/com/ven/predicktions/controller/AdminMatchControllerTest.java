@@ -9,6 +9,7 @@ import com.ven.predicktions.model.Role;
 import com.ven.predicktions.security.JwtAuthenticationFilter;
 import com.ven.predicktions.security.JwtService;
 import com.ven.predicktions.service.AdminPredictionService;
+import com.ven.predicktions.service.AdminMatchService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -38,6 +39,9 @@ class AdminMatchControllerTest {
 
     @MockitoBean
     private AdminPredictionService adminPredictionService;
+
+    @MockitoBean
+    private AdminMatchService adminMatchService;
 
     @MockitoBean
     private JwtService jwtService;
