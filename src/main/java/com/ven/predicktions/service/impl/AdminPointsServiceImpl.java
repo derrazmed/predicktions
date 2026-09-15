@@ -4,6 +4,7 @@ import com.ven.predicktions.dto.user.PointsAdjustmentRequest;
 import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
 import com.ven.predicktions.dto.user.AdminPointsAdjustmentPageResponse;
 import com.ven.predicktions.dto.user.AdminPointsAdjustmentResponse;
+import com.ven.predicktions.dto.user.AdjustmentHistoryFilter;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.model.PointsAdjustment;
 import com.ven.predicktions.model.User;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
@@ -81,19 +83,86 @@ public class AdminPointsServiceImpl implements AdminPointsService {
             throw new ResourceNotFoundException("User not found");
         }
 
-        Page<PointsAdjustment> adjustments =
-                pointsAdjustmentRepository.findByUserIdOrderByCreatedAtDescIdDesc(
-                        userId,
-                        PageRequest.of(
-                                page,
-                                size,
-                                Sort.by(
-                                        Sort.Order.desc("createdAt"),
-                                        Sort.Order.desc("id")
-                                )
-                        )
-                );
+        return toPageResponse(pointsAdjustmentRepository.findAll(
+                adjustmentSpecification(new AdjustmentHistoryFilter(
+                        userId, null, null, null
+                )),
+                pageable(page, size)
+        ));
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public AdminPointsAdjustmentPageResponse getAllAdjustmentHistory(
+            AdjustmentHistoryFilter filter,
+            int page,
+            int size
+    ) {
+        validatePage(page, size);
+        if (filter.from() != null && filter.to() != null
+                && filter.from().isAfter(filter.to())) {
+            throw new IllegalArgumentException("from must not be after to");
+        }
+
+        return toPageResponse(pointsAdjustmentRepository.findAll(
+                adjustmentSpecification(filter),
+                pageable(page, size)
+        ));
+    }
+
+    private void validatePage(int page, int size) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException(
+                    "Page must be non-negative and size must be between 1 and 100"
+            );
+        }
+    }
+
+    private PageRequest pageable(int page, int size) {
+        return PageRequest.of(
+                page,
+                size,
+                Sort.by(
+                        Sort.Order.desc("createdAt"),
+                        Sort.Order.desc("id")
+                )
+        );
+    }
+
+    private Specification<PointsAdjustment> adjustmentSpecification(
+            AdjustmentHistoryFilter filter
+    ) {
+        return (root, query, criteriaBuilder) -> {
+            var predicates = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
+            if (filter.userId() != null) {
+                predicates.add(criteriaBuilder.equal(
+                        root.get("user").get("id"), filter.userId()
+                ));
+            }
+            if (filter.adminId() != null) {
+                predicates.add(criteriaBuilder.equal(
+                        root.get("adjustedBy").get("id"), filter.adminId()
+                ));
+            }
+            if (filter.from() != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(
+                        root.get("createdAt"), filter.from()
+                ));
+            }
+            if (filter.to() != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(
+                        root.get("createdAt"), filter.to()
+                ));
+            }
+            return criteriaBuilder.and(predicates.toArray(
+                    jakarta.persistence.criteria.Predicate[]::new
+            ));
+        };
+    }
+
+    private AdminPointsAdjustmentPageResponse toPageResponse(
+            Page<PointsAdjustment> adjustments
+    ) {
         return new AdminPointsAdjustmentPageResponse(
                 adjustments.getContent().stream()
                         .map(adjustment -> new AdminPointsAdjustmentResponse(
