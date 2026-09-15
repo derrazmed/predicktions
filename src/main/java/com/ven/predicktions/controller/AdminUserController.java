@@ -5,18 +5,23 @@ import com.ven.predicktions.dto.user.AdminUserDetailsResponse;
 import com.ven.predicktions.dto.user.AdminUserResponse;
 import com.ven.predicktions.dto.user.ChangeUserRoleRequest;
 import com.ven.predicktions.dto.user.ChangeUserStatusRequest;
+import com.ven.predicktions.dto.user.AddPointsRequest;
+import com.ven.predicktions.dto.user.AddPointsResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
+import com.ven.predicktions.service.AdminPointsService;
 import com.ven.predicktions.service.AdminPredictionService;
 import com.ven.predicktions.service.AdminUserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 
 import java.util.UUID;
 
@@ -26,13 +31,16 @@ public class AdminUserController {
 
     private final AdminUserService adminUserService;
     private final AdminPredictionService adminPredictionService;
+    private final AdminPointsService adminPointsService;
 
     public AdminUserController(
             AdminUserService adminUserService,
-            AdminPredictionService adminPredictionService
+            AdminPredictionService adminPredictionService,
+            AdminPointsService adminPointsService
     ) {
         this.adminUserService = adminUserService;
         this.adminPredictionService = adminPredictionService;
+        this.adminPointsService = adminPointsService;
     }
 
     @GetMapping
@@ -78,6 +86,18 @@ public class AdminUserController {
     ) {
         return ResponseEntity.ok(
                 adminUserService.setUserEnabled(userId, request.enabled())
+        );
+    }
+
+    @PostMapping("/{userId}/points")
+    public ResponseEntity<AddPointsResponse> addPoints(
+            @PathVariable UUID userId,
+            @Valid @RequestBody AddPointsRequest request,
+            Authentication authentication
+    ) {
+        UUID adminUserId = (UUID) authentication.getPrincipal();
+        return ResponseEntity.ok(
+                adminPointsService.addPoints(userId, request, adminUserId)
         );
     }
 }

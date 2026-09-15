@@ -103,3 +103,45 @@ The last enabled administrator cannot be disabled. Attempts to disable that
 account return `400 Bad Request`; unknown user IDs return `404 Not Found`.
 The response uses the safe admin user representation and never contains
 passwords, tokens, or credentials.
+
+## Add points to a user
+
+```http
+POST /api/admin/users/{userId}/points
+Content-Type: application/json
+```
+
+Example request:
+
+```json
+{
+  "points": 10,
+  "reason": "Correction for incorrectly scored prediction"
+}
+```
+
+This operation requires the `ADMIN` role. The points value must be positive
+and the reason is required (maximum 500 characters). The authenticated
+administrator is recorded automatically; an administrator identity cannot be
+provided by the client.
+
+Manual awards are permanently stored as immutable audit events containing the
+player, points, reason, awarding administrator, and timestamp. They are added
+to the player's prediction points for global and league leaderboard ranking,
+and are reflected in user details. Unknown users return `404 Not Found`,
+validation errors return `400 Bad Request`, unauthenticated requests return
+`401 Unauthorized`, and authenticated non-admin users return `403 Forbidden`.
+
+The response confirms the award without exposing passwords, tokens, or other
+credentials:
+
+```json
+{
+  "userId": "76046ebc-93f1-41eb-81d1-e53a7164ad52",
+  "username": "testuser",
+  "pointsAwarded": 10,
+  "reason": "Correction for incorrectly scored prediction",
+  "awardedBy": "1bd7a7d3-4ea8-4c10-9bf6-17a7d5d2d2e1",
+  "createdAt": "2026-09-14T12:30:00Z"
+}
+```

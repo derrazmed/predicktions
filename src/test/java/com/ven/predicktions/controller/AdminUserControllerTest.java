@@ -13,6 +13,8 @@ import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.config.SecurityConfig;
 import com.ven.predicktions.service.AdminUserService;
 import com.ven.predicktions.service.AdminPredictionService;
+import com.ven.predicktions.service.AdminPointsService;
+import com.ven.predicktions.dto.user.AddPointsResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionResponse;
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,7 @@ import java.util.UUID;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AdminUserController.class)
@@ -47,6 +50,9 @@ class AdminUserControllerTest {
 
     @MockitoBean
     private AdminPredictionService adminPredictionService;
+
+    @MockitoBean
+    private AdminPointsService adminPointsService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -157,6 +163,69 @@ class AdminUserControllerTest {
                         .with(adminAuthentication(Role.ADMIN)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    void shouldAwardPointsForAdminUsingAuthenticatedIdentity() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        when(adminPointsService.addPoints(
+                org.mockito.ArgumentMatchers.eq(userId),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(adminId)
+        )).thenReturn(new AddPointsResponse(
+                userId, "testuser", 10,
+                "Correction", adminId,
+                Instant.parse("2026-09-14T12:30:00Z")
+        ));
+
+        mockMvc.perform(post("/api/admin/users/" + userId + "/points")
+                        .contentType("application/json")
+                        .content("{\"points\":10,\"reason\":\"Correction\"}")
+                        .with(adminAuthentication(Role.ADMIN, adminId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(userId.toString()))
+                .andExpect(jsonPath("$.pointsAwarded").value(10))
+                .andExpect(jsonPath("$.awardedBy").value(adminId.toString()))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.accessToken").doesNotExist());
+    }
+
+    @Test
+    void shouldRejectPointAwardForUserAndUnauthenticatedCaller() throws Exception {
+        String path = "/api/admin/users/" + UUID.randomUUID() + "/points";
+        String body = "{\"points\":10,\"reason\":\"Correction\"}";
+
+        mockMvc.perform(post(path).contentType("application/json").content(body)
+                        .with(adminAuthentication(Role.USER)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(path).contentType("application/json").content(body))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldRejectInvalidPointAwardPayloads() throws Exception {
+        String path = "/api/admin/users/" + UUID.randomUUID() + "/points";
+        var admin = adminAuthentication(Role.ADMIN);
+
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{}").with(admin))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{\"points\":0,\"reason\":\"Correction\"}").with(admin))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{\"points\":-1,\"reason\":\"Correction\"}").with(admin))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{\"points\":1,\"reason\":\"   \"}").with(admin))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{\"points\":1}").with(admin))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{\"points\":1,\"reason\":\"x\"").with(admin))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -350,9 +419,13 @@ class AdminUserControllerTest {
 
     private RequestPostProcessor
     adminAuthentication(Role role) {
+        return adminAuthentication(role, UUID.randomUUID());
+    }
+
+    private RequestPostProcessor adminAuthentication(Role role, UUID userId) {
         return SecurityMockMvcRequestPostProcessors.authentication(
                 new UsernamePasswordAuthenticationToken(
-                        UUID.randomUUID(),
+                        userId,
                         null,
                         AuthorityUtils.createAuthorityList("ROLE_" + role.name())
                 )

@@ -91,7 +91,7 @@ class AdminUserServiceTest {
         );
         when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
         when(predictionRepository.countByUserId(userId)).thenReturn(42L);
-        when(predictionRepository.sumPointsByUserId(userId)).thenReturn(127L);
+        when(predictionRepository.sumTotalPointsByUserId(userId)).thenReturn(127L);
         when(leagueMemberRepository.findAllByUserId(userId)).thenReturn(List.of());
         when(leaderboardService.getGlobalLeaderboard()).thenReturn(List.of(
                 new LeaderboardEntryResponse(8, userId, "testuser", 127)
