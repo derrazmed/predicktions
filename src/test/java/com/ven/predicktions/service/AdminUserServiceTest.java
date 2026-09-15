@@ -14,6 +14,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -187,6 +190,50 @@ class AdminUserServiceTest {
                 () -> service().setUserEnabled(userId, false)
         );
         assertThat(user.isEnabled()).isTrue();
+    }
+
+    @Test
+    void shouldRejectAdministratorDisablingTheirOwnAccount() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("admin", "admin@example.com", "hash", Role.ADMIN);
+        ReflectionTestUtils.setField(user, "id", userId);
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+        when(userRepository.findEnabledByRoleForUpdate(Role.ADMIN))
+                .thenReturn(List.of(user, new User("other", "other@example.com", "hash", Role.ADMIN)));
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userId, null, List.of()));
+
+        try {
+            assertThrows(
+                    com.ven.predicktions.exception.CannotDisableSelfException.class,
+                    () -> service().setUserEnabled(userId, false)
+            );
+            assertThat(user.isEnabled()).isTrue();
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void shouldRejectAdministratorRemovingTheirOwnRole() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("admin", "admin@example.com", "hash", Role.ADMIN);
+        ReflectionTestUtils.setField(user, "id", userId);
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(user));
+        when(userRepository.findAllByRoleForUpdate(Role.ADMIN))
+                .thenReturn(List.of(user, new User("other", "other@example.com", "hash", Role.ADMIN)));
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userId, null, List.of()));
+
+        try {
+            assertThrows(
+                    com.ven.predicktions.exception.CannotRemoveOwnAdminRoleException.class,
+                    () -> service().changeUserRole(userId, Role.USER)
+            );
+            assertThat(user.getRole()).isEqualTo(Role.ADMIN);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     @Test

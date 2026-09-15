@@ -7,6 +7,8 @@ import com.ven.predicktions.dto.user.AdminUserResponse;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.exception.LastAdministratorException;
 import com.ven.predicktions.exception.LastActiveAdministratorException;
+import com.ven.predicktions.exception.CannotDisableSelfException;
+import com.ven.predicktions.exception.CannotRemoveOwnAdminRoleException;
 import com.ven.predicktions.model.Role;
 import com.ven.predicktions.model.User;
 import com.ven.predicktions.model.AdminAuditAction;
@@ -105,6 +107,9 @@ public class AdminUserServiceImpl implements AdminUserService {
             if (userRepository.findAllByRoleForUpdate(Role.ADMIN).size() <= 1) {
                 throw new LastAdministratorException();
             }
+            if (isAuthenticatedUser(userId)) {
+                throw new CannotRemoveOwnAdminRoleException();
+            }
         }
 
         if (user.getRole() != role) {
@@ -131,6 +136,9 @@ public class AdminUserServiceImpl implements AdminUserService {
                 && userRepository.findEnabledByRoleForUpdate(Role.ADMIN).size() <= 1) {
             throw new LastActiveAdministratorException();
         }
+        if (!enabled && isAuthenticatedUser(userId)) {
+            throw new CannotDisableSelfException();
+        }
 
         user.setEnabled(enabled);
         record(enabled ? AdminAuditAction.USER_ENABLED : AdminAuditAction.USER_DISABLED,
@@ -143,6 +151,13 @@ public class AdminUserServiceImpl implements AdminUserService {
                 && SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof UUID adminId) {
             auditService.record(adminId, action, AdminAuditTargetType.USER, targetId, details);
         }
+    }
+
+    private boolean isAuthenticatedUser(UUID userId) {
+        Object principal = SecurityContextHolder.getContext().getAuthentication() == null
+                    ? null
+                    : SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return userId.equals(principal);
     }
 
     @Override

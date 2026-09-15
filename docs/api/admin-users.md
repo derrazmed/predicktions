@@ -72,10 +72,11 @@ Only authenticated `ADMIN` users can perform this operation. Valid roles are
 return `401 Unauthorized` and authenticated non-admin users return
 `403 Forbidden`.
 
-The final administrator cannot be demoted. Attempts to submit an unknown,
-missing, or null role return `400 Bad Request`. Unknown user IDs return
-`404 Not Found`. The response is the safe user representation and never
-contains passwords, password hashes, tokens, or credentials.
+The final administrator cannot be demoted, and an administrator cannot remove
+their own `ADMIN` role. These state conflicts return `409 Conflict`. Attempts
+to submit an unknown, missing, or null role return `400 Bad Request`. Unknown
+user IDs return `404 Not Found`. The response is the safe user representation
+and never contains passwords, password hashes, tokens, or credentials.
 
 ## Enable or disable a user
 
@@ -99,8 +100,9 @@ boolean. Disabling an account does not delete its data, but prevents password
 login and invalidates its existing JWT access immediately. Re-enabling restores
 normal authentication.
 
-The last enabled administrator cannot be disabled. Attempts to disable that
-account return `400 Bad Request`; unknown user IDs return `404 Not Found`.
+The last enabled administrator cannot be disabled, and an administrator cannot
+disable their own account. These state conflicts return `409 Conflict`;
+unknown user IDs return `404 Not Found`.
 The response uses the safe admin user representation and never contains
 passwords, tokens, or credentials.
 
