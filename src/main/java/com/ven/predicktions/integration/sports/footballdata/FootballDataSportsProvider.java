@@ -3,11 +3,11 @@ package com.ven.predicktions.integration.sports.footballdata;
 import com.ven.predicktions.integration.sports.SportsMatch;
 import com.ven.predicktions.integration.sports.SportsProvider;
 import com.ven.predicktions.model.MatchStatus;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @Component
 public class FootballDataSportsProvider implements SportsProvider {
@@ -97,5 +97,28 @@ public class FootballDataSportsProvider implements SportsProvider {
                 .stream()
                 .map(this::toSportsMatch)
                 .toList();
+    }
+
+    @Override
+    public List<SportsMatch> getCompetitionMatches(
+            String competitionCode,
+            LocalDate from,
+            LocalDate to
+    ) {
+        FootballDataMatchesResponse response = restClient.get()
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder
+                            .path("/competitions/{competitionCode}/matches")
+                            .queryParam("dateFrom", from)
+                            .queryParam("dateTo", to);
+                    return builder.build(competitionCode);
+                })
+                .retrieve()
+                .body(FootballDataMatchesResponse.class);
+
+        if (response == null || response.matches() == null) {
+            return List.of();
+        }
+        return response.matches().stream().map(this::toSportsMatch).toList();
     }
 }

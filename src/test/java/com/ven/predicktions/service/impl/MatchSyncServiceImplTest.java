@@ -2,6 +2,7 @@ package com.ven.predicktions.service.impl;
 
 import com.ven.predicktions.integration.sports.SportsMatch;
 import com.ven.predicktions.integration.sports.SportsProvider;
+import com.ven.predicktions.dto.match.MatchSyncRequest;
 import com.ven.predicktions.model.Match;
 import com.ven.predicktions.model.MatchStatus;
 import com.ven.predicktions.repository.MatchRepository;
@@ -239,6 +240,43 @@ class MatchSyncServiceImplTest {
 
         verify(matchRepository, never())
                 .save(any(Match.class));
+    }
+
+    @Test
+    void shouldManuallySyncAndReportCreatedAndUpdatedMatches() {
+        SportsMatch newMatch = new SportsMatch(
+                "new", "Home", "Away",
+                Instant.parse("2026-09-10T16:45:00Z"),
+                null, null, MatchStatus.SCHEDULED
+        );
+        Match existing = new Match(
+                "existing", "Old Home", "Old Away",
+                Instant.parse("2026-09-10T16:45:00Z"),
+                MatchStatus.SCHEDULED
+        );
+        SportsMatch updated = new SportsMatch(
+                "existing", "Home", "Away",
+                Instant.parse("2026-09-10T16:45:00Z"),
+                2, 1, MatchStatus.FINISHED
+        );
+        when(sportsProvider.getMatches("CL", 3, null, null))
+                .thenReturn(List.of(newMatch, updated));
+        when(matchRepository.findByExternalId("new")).thenReturn(Optional.empty());
+        when(matchRepository.findByExternalId("existing")).thenReturn(Optional.of(existing));
+        when(matchRepository.save(any(Match.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = matchSyncService.synchronizeManually(
+                new MatchSyncRequest("CL", 3, null, null, null)
+        );
+
+        assertThat(result.matchesRetrieved()).isEqualTo(2);
+        assertThat(result.matchesCreated()).isEqualTo(1);
+        assertThat(result.matchesUpdated()).isEqualTo(1);
+        assertThat(result.resultsUpdated()).isEqualTo(1);
+        assertThat(existing.getHomeScore()).isEqualTo(2);
+        assertThat(existing.getStatus()).isEqualTo(MatchStatus.FINISHED);
+        verify(matchRepository, times(2)).save(any(Match.class));
     }
 
     @Test
