@@ -10,4 +10,6 @@ public interface LeaderboardService {
     List<LeaderboardEntryResponse> getGlobalLeaderboard();
 
     List<LeaderboardEntryResponse> getLeagueLeaderboard(UUID userId, UUID leagueId);
+
+    List<LeaderboardEntryResponse> getLeagueLeaderboardForAdmin(UUID leagueId);
 }

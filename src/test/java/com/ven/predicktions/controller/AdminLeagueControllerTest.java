@@ -4,11 +4,16 @@ import com.ven.predicktions.config.SecurityConfig;
 import com.ven.predicktions.dto.league.AdminLeagueOwnerResponse;
 import com.ven.predicktions.dto.league.AdminLeaguePageResponse;
 import com.ven.predicktions.dto.league.AdminLeagueResponse;
+import com.ven.predicktions.dto.league.AdminLeagueDetailsResponse;
+import com.ven.predicktions.dto.league.AdminLeagueStatisticsResponse;
+import com.ven.predicktions.dto.leaderboard.LeaderboardEntryResponse;
+import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.exception.GlobalExceptionHandler;
 import com.ven.predicktions.model.Role;
 import com.ven.predicktions.security.JwtAuthenticationFilter;
 import com.ven.predicktions.security.JwtService;
 import com.ven.predicktions.service.AdminLeagueService;
+import com.ven.predicktions.service.AdminLeagueDetailsService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -38,6 +43,9 @@ class AdminLeagueControllerTest {
 
     @MockitoBean
     private AdminLeagueService adminLeagueService;
+
+    @MockitoBean
+    private AdminLeagueDetailsService adminLeagueDetailsService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -98,6 +106,48 @@ class AdminLeagueControllerTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(get(path))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldReturnLeagueDetailsForAdminWithoutSensitiveFields() throws Exception {
+        UUID leagueId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        when(adminLeagueDetailsService.getLeague(leagueId)).thenReturn(
+                new AdminLeagueDetailsResponse(
+                        leagueId,
+                        "League",
+                        Instant.parse("2026-09-12T23:24:18Z"),
+                        "JOIN123",
+                        1,
+                        new AdminLeagueOwnerResponse(ownerId, "owner"),
+                        List.of(),
+                        List.of(new LeaderboardEntryResponse(1, ownerId, "owner", 10)),
+                        new AdminLeagueStatisticsResponse(2, 1, 10, 5.0, 1, 1)
+                )
+        );
+
+        mockMvc.perform(get("/api/admin/leagues/{leagueId}", leagueId)
+                        .with(authentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(leagueId.toString()))
+                .andExpect(jsonPath("$.owner.id").value(ownerId.toString()))
+                .andExpect(jsonPath("$.leaderboard[0].rank").value(1))
+                .andExpect(jsonPath("$.statistics.totalPredictions").value(2))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.owner.password").doesNotExist())
+                .andExpect(jsonPath("$.owner.token").doesNotExist());
+    }
+
+    @Test
+    void shouldReturnNotFoundForUnknownLeagueDetails() throws Exception {
+        UUID leagueId = UUID.randomUUID();
+        when(adminLeagueDetailsService.getLeague(leagueId))
+                .thenThrow(new ResourceNotFoundException("League not found"));
+
+        mockMvc.perform(get("/api/admin/leagues/{leagueId}", leagueId)
+                        .with(authentication(Role.ADMIN)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
 
     private RequestPostProcessor authentication(Role role) {
