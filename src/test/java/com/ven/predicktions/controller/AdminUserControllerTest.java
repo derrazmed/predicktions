@@ -15,6 +15,8 @@ import com.ven.predicktions.service.AdminUserService;
 import com.ven.predicktions.service.AdminPredictionService;
 import com.ven.predicktions.service.AdminPointsService;
 import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
+import com.ven.predicktions.dto.user.AdminPointsAdjustmentPageResponse;
+import com.ven.predicktions.dto.user.AdminPointsAdjustmentResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionResponse;
 import org.junit.jupiter.api.Test;
@@ -265,6 +267,75 @@ class AdminUserControllerTest {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(post(path).contentType("application/json")
                         .content("{\"points\":-5,\"reason\":\"" + "x".repeat(501) + "\"}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldReturnPointAdjustmentHistoryForAdmin() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID adjustmentId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        when(adminPointsService.getAdjustmentHistory(userId, 0, 20))
+                .thenReturn(new AdminPointsAdjustmentPageResponse(
+                        List.of(new AdminPointsAdjustmentResponse(
+                                adjustmentId,
+                                userId,
+                                adminId,
+                                -5,
+                                "Manual correction",
+                                Instant.parse("2026-09-14T12:30:00Z")
+                        )),
+                        0, 20, 1, 1
+                ));
+
+        mockMvc.perform(get("/api/admin/users/" + userId + "/points/adjustments")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(adjustmentId.toString()))
+                .andExpect(jsonPath("$.content[0].userId").value(userId.toString()))
+                .andExpect(jsonPath("$.content[0].adminId").value(adminId.toString()))
+                .andExpect(jsonPath("$.content[0].points").value(-5))
+                .andExpect(jsonPath("$.content[0].reason").value("Manual correction"))
+                .andExpect(jsonPath("$.content[0].createdAt").exists())
+                .andExpect(jsonPath("$.content[0].passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.content[0].token").doesNotExist());
+    }
+
+    @Test
+    void shouldPassHistoryPaginationAndRejectUnauthorizedHistoryRequests()
+            throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(adminPointsService.getAdjustmentHistory(userId, 2, 10))
+                .thenReturn(new AdminPointsAdjustmentPageResponse(
+                        List.of(), 2, 10, 0, 0
+                ));
+
+        mockMvc.perform(get("/api/admin/users/" + userId
+                        + "/points/adjustments?page=2&size=10")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.content").isEmpty());
+
+        String path = "/api/admin/users/" + userId + "/points/adjustments";
+        mockMvc.perform(get(path).with(adminAuthentication(Role.USER)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(path))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldRejectInvalidHistoryPagination() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(adminPointsService.getAdjustmentHistory(userId, 0, 101))
+                .thenThrow(new IllegalArgumentException(
+                        "Page must be non-negative and size must be between 1 and 100"
+                ));
+
+        mockMvc.perform(get("/api/admin/users/" + userId
+                        + "/points/adjustments?size=101")
                         .with(adminAuthentication(Role.ADMIN)))
                 .andExpect(status().isBadRequest());
     }
