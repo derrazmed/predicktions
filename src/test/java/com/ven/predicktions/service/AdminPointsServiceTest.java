@@ -1,7 +1,7 @@
 package com.ven.predicktions.service;
 
-import com.ven.predicktions.dto.user.AddPointsRequest;
-import com.ven.predicktions.dto.user.AddPointsResponse;
+import com.ven.predicktions.dto.user.PointsAdjustmentRequest;
+import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.model.PointsAdjustment;
 import com.ven.predicktions.model.Role;
@@ -43,9 +43,9 @@ class AdminPointsServiceTest {
         when(pointsAdjustmentRepository.save(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        AddPointsResponse response = service().addPoints(
+        PointsAdjustmentResponse response = service().adjustPoints(
                 userId,
-                new AddPointsRequest(10, "Correction"),
+                new PointsAdjustmentRequest(10, "Correction"),
                 adminId
         );
 
@@ -56,9 +56,9 @@ class AdminPointsServiceTest {
         assertThat(adjustment.getUser()).isSameAs(user);
         assertThat(adjustment.getPoints()).isEqualTo(10);
         assertThat(adjustment.getReason()).isEqualTo("Correction");
-        assertThat(adjustment.getAwardedBy()).isSameAs(admin);
+        assertThat(adjustment.getAdjustedBy()).isSameAs(admin);
         assertThat(response.username()).isEqualTo("player");
-        assertThat(response.pointsAwarded()).isEqualTo(10);
+        assertThat(response.points()).isEqualTo(10);
     }
 
     @Test
@@ -68,14 +68,38 @@ class AdminPointsServiceTest {
 
         assertThrows(
                 ResourceNotFoundException.class,
-                () -> service().addPoints(
+                () -> service().adjustPoints(
                         userId,
-                        new AddPointsRequest(10, "Correction"),
+                        new PointsAdjustmentRequest(10, "Correction"),
                         UUID.randomUUID()
                 )
         );
 
         org.mockito.Mockito.verifyNoInteractions(pointsAdjustmentRepository);
+    }
+
+    @Test
+    void shouldPersistNegativeAdjustmentWithoutChangingItsSign() {
+        UUID userId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        User user = new User("player", "player@example.com", "hash");
+        User admin = new User("admin", "admin@example.com", "hash", Role.ADMIN);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
+        when(pointsAdjustmentRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        PointsAdjustmentResponse response = service().adjustPoints(
+                userId,
+                new PointsAdjustmentRequest(-5, "Manual correction"),
+                adminId
+        );
+
+        ArgumentCaptor<PointsAdjustment> captor =
+                ArgumentCaptor.forClass(PointsAdjustment.class);
+        verify(pointsAdjustmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getPoints()).isEqualTo(-5);
+        assertThat(response.points()).isEqualTo(-5);
     }
 
     private AdminPointsServiceImpl service() {

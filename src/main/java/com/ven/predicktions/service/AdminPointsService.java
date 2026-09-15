@@ -1,11 +1,15 @@
 package com.ven.predicktions.service;
 
-import com.ven.predicktions.dto.user.AddPointsRequest;
-import com.ven.predicktions.dto.user.AddPointsResponse;
+import com.ven.predicktions.dto.user.PointsAdjustmentRequest;
+import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
 
 import java.util.UUID;
 
 public interface AdminPointsService {
 
-    AddPointsResponse addPoints(UUID userId, AddPointsRequest request, UUID adminUserId);
+    PointsAdjustmentResponse adjustPoints(
+            UUID userId,
+            PointsAdjustmentRequest request,
+            UUID adminUserId
+    );
 }
