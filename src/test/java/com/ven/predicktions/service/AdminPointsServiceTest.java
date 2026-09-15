@@ -114,9 +114,9 @@ class AdminPointsServiceTest {
                 user, -5, "Manual correction", admin
         );
         when(userRepository.existsById(userId)).thenReturn(true);
-        when(pointsAdjustmentRepository.findByUserIdOrderByCreatedAtDescIdDesc(
-                org.mockito.ArgumentMatchers.eq(userId),
-                org.mockito.ArgumentMatchers.any()
+        when(pointsAdjustmentRepository.findAll(
+                org.mockito.ArgumentMatchers.any(org.springframework.data.jpa.domain.Specification.class),
+                org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)
         )).thenReturn(new PageImpl<>(java.util.List.of(adjustment)));
 
         AdminPointsAdjustmentPageResponse response =

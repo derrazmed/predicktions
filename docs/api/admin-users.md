@@ -194,3 +194,24 @@ point adjustments, newest first. Pagination is zero-based, defaults to page
 An existing player with no adjustments returns an empty `content` array.
 Unknown players return `404 Not Found`; unauthenticated requests return
 `401 Unauthorized`; authenticated non-admin users return `403 Forbidden`.
+
+## All point adjustments
+
+```http
+GET /api/admin/points/adjustments?page=0&size=20
+```
+
+Administrators can inspect all manual adjustments across all players. Optional
+filters are `userId`, `adminId`, `from`, and `to`:
+
+```http
+GET /api/admin/points/adjustments?userId=<uuid>&adminId=<uuid>&from=2026-09-01T00:00:00Z&to=2026-09-15T23:59:59Z&page=0&size=50
+```
+
+`from` and `to` are inclusive ISO-8601 timestamps. Results are ordered by
+newest `createdAt`, then descending adjustment ID, and use the same paginated
+response shape as the user-specific history endpoint. Malformed UUIDs,
+timestamps, reversed date ranges, and page sizes above `100` return
+`400 Bad Request`. No matching records return `200 OK` with an empty
+`content` array. This endpoint is ADMIN-only and is read-only; retrieving
+history never changes points or creates audit records.

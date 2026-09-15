@@ -3,6 +3,7 @@ package com.ven.predicktions.service;
 import com.ven.predicktions.dto.user.PointsAdjustmentRequest;
 import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
 import com.ven.predicktions.dto.user.AdminPointsAdjustmentPageResponse;
+import com.ven.predicktions.dto.user.AdjustmentHistoryFilter;
 
 import java.util.UUID;
 
@@ -16,6 +17,12 @@ public interface AdminPointsService {
 
     AdminPointsAdjustmentPageResponse getAdjustmentHistory(
             UUID userId,
+            int page,
+            int size
+    );
+
+    AdminPointsAdjustmentPageResponse getAllAdjustmentHistory(
+            AdjustmentHistoryFilter filter,
             int page,
             int size
     );
