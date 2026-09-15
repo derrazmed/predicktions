@@ -7,6 +7,7 @@ import com.ven.predicktions.dto.user.ChangeUserRoleRequest;
 import com.ven.predicktions.dto.user.ChangeUserStatusRequest;
 import com.ven.predicktions.dto.user.PointsAdjustmentRequest;
 import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
+import com.ven.predicktions.dto.user.AdminPointsAdjustmentPageResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
 import com.ven.predicktions.service.AdminPointsService;
 import com.ven.predicktions.service.AdminPredictionService;
@@ -98,6 +99,17 @@ public class AdminUserController {
         UUID adminUserId = (UUID) authentication.getPrincipal();
         return ResponseEntity.ok(
                 adminPointsService.adjustPoints(userId, request, adminUserId)
+        );
+    }
+
+    @GetMapping("/{userId}/points/adjustments")
+    public ResponseEntity<AdminPointsAdjustmentPageResponse> getPointAdjustments(
+            @PathVariable UUID userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(
+                adminPointsService.getAdjustmentHistory(userId, page, size)
         );
     }
 }

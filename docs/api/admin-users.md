@@ -157,3 +157,40 @@ credentials:
   "createdAt": "2026-09-14T12:30:00Z"
 }
 ```
+
+Every successful adjustment creates a permanent audit record. The authenticated
+administrator is stored as `adminId`; clients cannot provide or impersonate
+that identity.
+
+## Point adjustment history
+
+```http
+GET /api/admin/users/{userId}/points/adjustments?page=0&size=20
+```
+
+This endpoint requires the `ADMIN` role and returns the player's signed manual
+point adjustments, newest first. Pagination is zero-based, defaults to page
+`0` and size `20`, and is limited to `100` records per page.
+
+```json
+{
+  "content": [
+    {
+      "id": "6db0f0c0-1f30-4d31-9d35-7a1a6761d1a0",
+      "userId": "76046ebc-93f1-41eb-81d1-e53a7164ad52",
+      "adminId": "1bd7a7d3-4ea8-4c10-9bf6-17a7d5d2d2e1",
+      "points": -5,
+      "reason": "Manual correction",
+      "createdAt": "2026-09-14T12:30:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+An existing player with no adjustments returns an empty `content` array.
+Unknown players return `404 Not Found`; unauthenticated requests return
+`401 Unauthorized`; authenticated non-admin users return `403 Forbidden`.

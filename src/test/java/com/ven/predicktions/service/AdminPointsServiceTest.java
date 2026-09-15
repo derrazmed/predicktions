@@ -2,6 +2,7 @@ package com.ven.predicktions.service;
 
 import com.ven.predicktions.dto.user.PointsAdjustmentRequest;
 import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
+import com.ven.predicktions.dto.user.AdminPointsAdjustmentPageResponse;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.model.PointsAdjustment;
 import com.ven.predicktions.model.Role;
@@ -17,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.PageImpl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -100,6 +102,47 @@ class AdminPointsServiceTest {
         verify(pointsAdjustmentRepository).save(captor.capture());
         assertThat(captor.getValue().getPoints()).isEqualTo(-5);
         assertThat(response.points()).isEqualTo(-5);
+    }
+
+    @Test
+    void shouldReturnNewestFirstAdjustmentHistoryForExistingUser() {
+        UUID userId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        User user = new User("player", "player@example.com", "hash");
+        User admin = new User("admin", "admin@example.com", "hash", Role.ADMIN);
+        PointsAdjustment adjustment = new PointsAdjustment(
+                user, -5, "Manual correction", admin
+        );
+        when(userRepository.existsById(userId)).thenReturn(true);
+        when(pointsAdjustmentRepository.findByUserIdOrderByCreatedAtDescIdDesc(
+                org.mockito.ArgumentMatchers.eq(userId),
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(new PageImpl<>(java.util.List.of(adjustment)));
+
+        AdminPointsAdjustmentPageResponse response =
+                service().getAdjustmentHistory(userId, 0, 20);
+
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().getFirst().userId()).isEqualTo(user.getId());
+        assertThat(response.content().getFirst().adminId()).isEqualTo(admin.getId());
+        assertThat(response.content().getFirst().points()).isEqualTo(-5);
+        assertThat(response.content().getFirst().reason())
+                .isEqualTo("Manual correction");
+    }
+
+    @Test
+    void shouldRejectHistoryForUnknownUserOrInvalidPageSize() {
+        UUID userId = UUID.randomUUID();
+        when(userRepository.existsById(userId)).thenReturn(false);
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> service().getAdjustmentHistory(userId, 0, 20)
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service().getAdjustmentHistory(userId, 0, 101)
+        );
     }
 
     private AdminPointsServiceImpl service() {
