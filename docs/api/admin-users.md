@@ -215,3 +215,27 @@ timestamps, reversed date ranges, and page sizes above `100` return
 `400 Bad Request`. No matching records return `200 OK` with an empty
 `content` array. This endpoint is ADMIN-only and is read-only; retrieving
 history never changes points or creates audit records.
+
+## Manual match synchronization
+
+```http
+POST /api/admin/matches/sync
+```
+
+Normal match retrieval remains `GET /api/matches` and reads only the local
+database. This ADMIN-only action invokes the configured football-data provider
+and upserts matches by their external provider ID, preserving existing match
+IDs and prediction relationships.
+
+Optional filters are `gameweek`, `competition`, `date`, `from`, and `to`:
+
+```http
+POST /api/admin/matches/sync?gameweek=3
+POST /api/admin/matches/sync?from=2026-09-01&to=2026-09-15
+```
+
+Repeated synchronization is idempotent. Existing matches are updated with
+provider teams, kickoff time, status, and scores; new matches are created.
+The response reports retrieved, created, updated, result-updated, and failed
+counts. Invalid dates or ranges return `400 Bad Request`, unauthenticated
+requests return `401 Unauthorized`, and non-admin users return `403 Forbidden`.
