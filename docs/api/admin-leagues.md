@@ -65,3 +65,20 @@ Matches, global leaderboard data, point-adjustment history, and unrelated
 leagues are also preserved. A repeated deletion or unknown league returns
 `404 Not Found`; unauthenticated and non-admin requests return `401` and
 `403`.
+
+## Remove a member
+
+```http
+DELETE /api/admin/leagues/{leagueId}/members/{userId}
+```
+
+This moderation endpoint requires the `ADMIN` role and returns `204 No Content`
+when the specified membership is removed. It deletes only that row from
+`league_members`. The user account, predictions, points, global leaderboard
+position, other league memberships, matches, and point-adjustment history are
+preserved.
+
+Unknown leagues, users, or memberships return `404 Not Found`. The league
+owner cannot be removed through this endpoint and returns `400 Bad Request`
+with `Cannot remove the league owner.` Unauthenticated and non-admin requests
+return `401` and `403`.
