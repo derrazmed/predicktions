@@ -2,6 +2,7 @@ package com.ven.predicktions.service;
 
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.repository.PredictionRepository;
+import com.ven.predicktions.repository.MatchRepository;
 import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.service.impl.AdminPredictionServiceImpl;
 import org.junit.jupiter.api.Test;
@@ -24,16 +25,36 @@ class AdminPredictionServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private MatchRepository matchRepository;
+
     @Test
     void shouldRejectPredictionHistoryForUnknownUser() {
         UUID userId = UUID.randomUUID();
         when(userRepository.existsById(userId)).thenReturn(false);
 
         AdminPredictionService service =
-                new AdminPredictionServiceImpl(predictionRepository, userRepository);
+                new AdminPredictionServiceImpl(
+                        predictionRepository, userRepository, matchRepository
+                );
 
         assertThatThrownBy(() -> service.getUserPredictions(userId, 0, 20))
                 .isInstanceOf(ResourceNotFoundException.class);
         verify(userRepository).existsById(userId);
+    }
+
+    @Test
+    void shouldRejectPredictionsForUnknownMatch() {
+        UUID matchId = UUID.randomUUID();
+        when(matchRepository.existsById(matchId)).thenReturn(false);
+
+        AdminPredictionService service =
+                new AdminPredictionServiceImpl(
+                        predictionRepository, userRepository, matchRepository
+                );
+
+        assertThatThrownBy(() -> service.getMatchPredictions(matchId, 0, 20))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(matchRepository).existsById(matchId);
     }
 }

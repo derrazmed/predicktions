@@ -19,4 +19,6 @@ public interface AdminPredictionService {
     );
 
     AdminPredictionPageResponse getUserPredictions(UUID userId, int page, int size);
+
+    AdminPredictionPageResponse getMatchPredictions(UUID matchId, int page, int size);
 }

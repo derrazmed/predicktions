@@ -3,6 +3,7 @@ package com.ven.predicktions.service.impl;
 import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionResponse;
 import com.ven.predicktions.model.Prediction;
+import com.ven.predicktions.repository.MatchRepository;
 import com.ven.predicktions.repository.PredictionRepository;
 import com.ven.predicktions.repository.UserRepository;
 import com.ven.predicktions.service.AdminPredictionService;
@@ -31,13 +32,16 @@ public class AdminPredictionServiceImpl implements AdminPredictionService {
 
     private final PredictionRepository predictionRepository;
     private final UserRepository userRepository;
+    private final MatchRepository matchRepository;
 
     public AdminPredictionServiceImpl(
             PredictionRepository predictionRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            MatchRepository matchRepository
     ) {
         this.predictionRepository = predictionRepository;
         this.userRepository = userRepository;
+        this.matchRepository = matchRepository;
     }
 
     @Override
@@ -53,6 +57,22 @@ public class AdminPredictionServiceImpl implements AdminPredictionService {
 
         return getPredictions(
                 userId, null, null, null, null, null, page, size
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AdminPredictionPageResponse getMatchPredictions(
+            UUID matchId,
+            int page,
+            int size
+    ) {
+        if (!matchRepository.existsById(matchId)) {
+            throw new ResourceNotFoundException("Match not found");
+        }
+
+        return getPredictions(
+                null, matchId, null, null, null, null, page, size
         );
     }
 
