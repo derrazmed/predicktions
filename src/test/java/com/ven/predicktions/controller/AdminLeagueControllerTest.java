@@ -16,6 +16,7 @@ import com.ven.predicktions.service.AdminLeagueService;
 import com.ven.predicktions.service.AdminLeagueDetailsService;
 import com.ven.predicktions.service.AdminLeagueDeletionService;
 import com.ven.predicktions.service.AdminLeagueMembershipService;
+import com.ven.predicktions.service.LeaderboardService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -56,6 +57,9 @@ class AdminLeagueControllerTest {
 
     @MockitoBean
     private AdminLeagueMembershipService adminLeagueMembershipService;
+
+    @MockitoBean
+    private LeaderboardService leaderboardService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -178,6 +182,18 @@ class AdminLeagueControllerTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(delete(path))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldReturnLeagueLeaderboardForAdmin() throws Exception {
+        UUID leagueId = UUID.randomUUID();
+        when(leaderboardService.getLeagueLeaderboardForAdmin(leagueId))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/admin/leagues/{leagueId}/leaderboard", leagueId)
+                        .with(authentication(Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test

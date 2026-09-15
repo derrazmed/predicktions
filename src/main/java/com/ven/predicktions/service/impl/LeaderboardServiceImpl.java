@@ -29,39 +29,32 @@ public class LeaderboardServiceImpl implements LeaderboardService {
 
     @Override
     public List<LeaderboardEntryResponse> getGlobalLeaderboard() {
+        return mapLeaderboard(predictionRepository.findGlobalLeaderboard());
+    }
 
-        List<Object[]> results =
-                predictionRepository.findGlobalLeaderboard();
+    @Override
+    public List<LeaderboardEntryResponse> getGlobalLeaderboard(
+            Integer gameweek,
+            Integer season
+    ) {
+        validateFilters(gameweek, season);
 
-        long previousPoints = Long.MIN_VALUE;
-        int currentRank = 0;
-
-        List<LeaderboardEntryResponse> leaderboard = new java.util.ArrayList<>();
-
-        for (int i = 0; i < results.size(); i++) {
-
-            Object[] row = results.get(i);
-
-            UUID userId = (UUID) row[0];
-            String username = (String) row[1];
-            long totalPoints = ((Number) row[2]).longValue();
-
-            if (totalPoints != previousPoints) {
-                currentRank = i + 1;
-                previousPoints = totalPoints;
-            }
-
-            leaderboard.add(
-                    new LeaderboardEntryResponse(
-                            currentRank,
-                            userId,
-                            username,
-                            totalPoints
-                    )
-            );
+        if (gameweek == null && season == null) {
+            return getGlobalLeaderboard();
         }
 
-        return leaderboard;
+        return mapLeaderboard(
+                predictionRepository.findGlobalLeaderboard(season, gameweek)
+        );
+    }
+
+    private void validateFilters(Integer gameweek, Integer season) {
+        if (gameweek != null && (gameweek < 1 || gameweek > 53)) {
+            throw new IllegalArgumentException("gameweek must be between 1 and 53");
+        }
+        if (season != null && (season < 1 || season > 9999)) {
+            throw new IllegalArgumentException("season must be between 1 and 9999");
+        }
     }
 
     @Override

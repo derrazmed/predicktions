@@ -6,8 +6,11 @@ import com.ven.predicktions.service.AdminLeagueService;
 import com.ven.predicktions.service.AdminLeagueDetailsService;
 import com.ven.predicktions.service.AdminLeagueDeletionService;
 import com.ven.predicktions.service.AdminLeagueMembershipService;
+import com.ven.predicktions.service.LeaderboardService;
+import com.ven.predicktions.dto.leaderboard.LeaderboardEntryResponse;
 import org.springframework.web.bind.annotation.PathVariable;
 import java.util.UUID;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -24,17 +27,20 @@ public class AdminLeagueController {
     private final AdminLeagueDetailsService adminLeagueDetailsService;
     private final AdminLeagueDeletionService adminLeagueDeletionService;
     private final AdminLeagueMembershipService adminLeagueMembershipService;
+    private final LeaderboardService leaderboardService;
 
     public AdminLeagueController(
             AdminLeagueService adminLeagueService,
             AdminLeagueDetailsService adminLeagueDetailsService,
             AdminLeagueDeletionService adminLeagueDeletionService,
-            AdminLeagueMembershipService adminLeagueMembershipService
+            AdminLeagueMembershipService adminLeagueMembershipService,
+            LeaderboardService leaderboardService
     ) {
         this.adminLeagueService = adminLeagueService;
         this.adminLeagueDetailsService = adminLeagueDetailsService;
         this.adminLeagueDeletionService = adminLeagueDeletionService;
         this.adminLeagueMembershipService = adminLeagueMembershipService;
+        this.leaderboardService = leaderboardService;
     }
 
     @GetMapping
@@ -76,5 +82,12 @@ public class AdminLeagueController {
                 (UUID) authentication.getPrincipal()
         );
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{leagueId}/leaderboard")
+    public ResponseEntity<List<LeaderboardEntryResponse>> getLeagueLeaderboard(
+            @PathVariable UUID leagueId
+    ) {
+        return ResponseEntity.ok(leaderboardService.getLeagueLeaderboardForAdmin(leagueId));
     }
 }

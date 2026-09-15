@@ -131,6 +131,25 @@ class LeaderboardServiceImplTest {
     }
 
     @Test
+    void shouldUseFilteredRepositoryQueryForGameweekAndSeason() {
+        when(predictionRepository.findGlobalLeaderboard(2026, 3))
+                .thenReturn(List.of());
+
+        assertTrue(leaderboardService.getGlobalLeaderboard(3, 2026).isEmpty());
+        verify(predictionRepository).findGlobalLeaderboard(2026, 3);
+    }
+
+    @Test
+    void shouldRejectInvalidLeaderboardFilters() {
+        assertThrows(IllegalArgumentException.class,
+                () -> leaderboardService.getGlobalLeaderboard(0, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> leaderboardService.getGlobalLeaderboard(54, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> leaderboardService.getGlobalLeaderboard(null, 0));
+    }
+
+    @Test
     void shouldRankNegativeAdjustedTotalsUsingExistingOrdering() {
         UUID aliceId = UUID.randomUUID();
         UUID bobId = UUID.randomUUID();
