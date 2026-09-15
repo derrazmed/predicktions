@@ -4,10 +4,13 @@ import com.ven.predicktions.dto.league.AdminLeaguePageResponse;
 import com.ven.predicktions.dto.league.AdminLeagueDetailsResponse;
 import com.ven.predicktions.service.AdminLeagueService;
 import com.ven.predicktions.service.AdminLeagueDetailsService;
+import com.ven.predicktions.service.AdminLeagueDeletionService;
 import org.springframework.web.bind.annotation.PathVariable;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,13 +21,16 @@ public class AdminLeagueController {
 
     private final AdminLeagueService adminLeagueService;
     private final AdminLeagueDetailsService adminLeagueDetailsService;
+    private final AdminLeagueDeletionService adminLeagueDeletionService;
 
     public AdminLeagueController(
             AdminLeagueService adminLeagueService,
-            AdminLeagueDetailsService adminLeagueDetailsService
+            AdminLeagueDetailsService adminLeagueDetailsService,
+            AdminLeagueDeletionService adminLeagueDeletionService
     ) {
         this.adminLeagueService = adminLeagueService;
         this.adminLeagueDetailsService = adminLeagueDetailsService;
+        this.adminLeagueDeletionService = adminLeagueDeletionService;
     }
 
     @GetMapping
@@ -40,5 +46,17 @@ public class AdminLeagueController {
             @PathVariable UUID leagueId
     ) {
         return ResponseEntity.ok(adminLeagueDetailsService.getLeague(leagueId));
+    }
+
+    @DeleteMapping("/{leagueId}")
+    public ResponseEntity<Void> deleteLeague(
+            @PathVariable UUID leagueId,
+            Authentication authentication
+    ) {
+        adminLeagueDeletionService.deleteLeague(
+                leagueId,
+                (UUID) authentication.getPrincipal()
+        );
+        return ResponseEntity.noContent().build();
     }
 }

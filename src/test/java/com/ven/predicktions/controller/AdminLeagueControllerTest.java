@@ -14,6 +14,7 @@ import com.ven.predicktions.security.JwtAuthenticationFilter;
 import com.ven.predicktions.security.JwtService;
 import com.ven.predicktions.service.AdminLeagueService;
 import com.ven.predicktions.service.AdminLeagueDetailsService;
+import com.ven.predicktions.service.AdminLeagueDeletionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -31,6 +32,7 @@ import java.util.UUID;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -46,6 +48,9 @@ class AdminLeagueControllerTest {
 
     @MockitoBean
     private AdminLeagueDetailsService adminLeagueDetailsService;
+
+    @MockitoBean
+    private AdminLeagueDeletionService adminLeagueDeletionService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -148,6 +153,26 @@ class AdminLeagueControllerTest {
                         .with(authentication(Role.ADMIN)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    void shouldDeleteLeagueForAdmin() throws Exception {
+        UUID leagueId = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/admin/leagues/{leagueId}", leagueId)
+                        .with(authentication(Role.ADMIN)))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void shouldRejectLeagueDeletionForNonAdminAndUnauthenticatedRequests() throws Exception {
+        UUID leagueId = UUID.randomUUID();
+        String path = "/api/admin/leagues/" + leagueId;
+
+        mockMvc.perform(delete(path).with(authentication(Role.USER)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete(path))
+                .andExpect(status().isUnauthorized());
     }
 
     private RequestPostProcessor authentication(Role role) {
