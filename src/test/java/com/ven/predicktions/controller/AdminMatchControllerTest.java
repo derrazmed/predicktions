@@ -3,6 +3,7 @@ package com.ven.predicktions.controller;
 import com.ven.predicktions.config.SecurityConfig;
 import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionResponse;
+import com.ven.predicktions.dto.match.MatchRecalculationResponse;
 import com.ven.predicktions.exception.GlobalExceptionHandler;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.model.Role;
@@ -27,6 +28,7 @@ import java.util.UUID;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -131,10 +133,44 @@ class AdminMatchControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void shouldRecalculateMatchPredictionsForAdmin() throws Exception {
+        UUID matchId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        when(adminMatchService.recalculate(matchId, adminId))
+                .thenReturn(new MatchRecalculationResponse(
+                        matchId, 1, 0, 3, 2, 1,
+                        Instant.parse("2026-09-15T10:30:00Z")
+                ));
+
+        mockMvc.perform(post("/api/admin/matches/{matchId}/recalculate", matchId)
+                        .with(authentication(adminId, Role.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matchId").value(matchId.toString()))
+                .andExpect(jsonPath("$.predictionsProcessed").value(3))
+                .andExpect(jsonPath("$.predictionsUpdated").value(2))
+                .andExpect(jsonPath("$.predictionsUnchanged").value(1));
+    }
+
+    @Test
+    void shouldRejectRecalculationForNonAdminAndUnauthenticatedRequests() throws Exception {
+        UUID matchId = UUID.randomUUID();
+        String path = "/api/admin/matches/" + matchId + "/recalculate";
+
+        mockMvc.perform(post(path).with(authentication(UUID.randomUUID(), Role.USER)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(path))
+                .andExpect(status().isUnauthorized());
+    }
+
     private RequestPostProcessor authentication(Role role) {
+        return authentication(UUID.randomUUID(), role);
+    }
+
+    private RequestPostProcessor authentication(UUID principal, Role role) {
         return SecurityMockMvcRequestPostProcessors.authentication(
                 new UsernamePasswordAuthenticationToken(
-                        UUID.randomUUID(),
+                        principal,
                         null,
                         AuthorityUtils.createAuthorityList("ROLE_" + role.name())
                 )

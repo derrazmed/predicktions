@@ -1,6 +1,7 @@
 package com.ven.predicktions.service;
 
 import com.ven.predicktions.dto.match.UpdateMatchResultRequest;
+import com.ven.predicktions.service.impl.PredictionRecalculationServiceImpl;
 import com.ven.predicktions.mapper.MatchMapper;
 import com.ven.predicktions.model.Match;
 import com.ven.predicktions.model.MatchStatus;
@@ -43,8 +44,12 @@ class AdminMatchServiceTest {
         when(predictionRepository.findAllByMatchId(any()))
                 .thenReturn(List.of(exact, outcome));
 
+        PredictionScoringService scoringService =
+                new com.ven.predicktions.service.impl.PredictionScoringServiceImpl();
         new AdminMatchServiceImpl(
-                matchRepository, predictionRepository, matchMapper
+                matchRepository,
+                new PredictionRecalculationServiceImpl(predictionRepository, scoringService),
+                matchMapper
         ).updateResult(
                 UUID.randomUUID(),
                 new UpdateMatchResultRequest(2, 1),

@@ -5,6 +5,7 @@ import com.ven.predicktions.service.AdminPredictionService;
 import com.ven.predicktions.service.AdminMatchService;
 import com.ven.predicktions.dto.match.UpdateMatchResultRequest;
 import com.ven.predicktions.dto.match.MatchResponse;
+import com.ven.predicktions.dto.match.MatchRecalculationResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -53,6 +55,17 @@ public class AdminMatchController {
         return ResponseEntity.ok(adminMatchService.updateResult(
                 matchId,
                 request,
+                (UUID) authentication.getPrincipal()
+        ));
+    }
+
+    @PostMapping("/{matchId}/recalculate")
+    public ResponseEntity<MatchRecalculationResponse> recalculate(
+            @PathVariable UUID matchId,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(adminMatchService.recalculate(
+                matchId,
                 (UUID) authentication.getPrincipal()
         ));
     }
