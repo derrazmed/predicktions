@@ -60,6 +60,21 @@ public interface PredictionRepository extends JpaRepository<Prediction, UUID>,
     List<Object[]> findGlobalLeaderboard();
 
     @Query(value = """
+        SELECT u.id, u.username, COALESCE(SUM(p.points), 0) AS total_points
+        FROM predictions p
+        JOIN users u ON u.id = p.user_id
+        JOIN matches m ON m.id = p.match_id
+        WHERE (:season IS NULL OR EXTRACT(YEAR FROM (m.kickoff_at AT TIME ZONE 'UTC')) = :season)
+          AND (:gameweek IS NULL OR EXTRACT(ISOWeek FROM (m.kickoff_at AT TIME ZONE 'UTC')) = :gameweek)
+        GROUP BY u.id, u.username
+        ORDER BY total_points DESC, u.username ASC
+        """, nativeQuery = true)
+    List<Object[]> findGlobalLeaderboard(
+            @Param("season") Integer season,
+            @Param("gameweek") Integer gameweek
+    );
+
+    @Query(value = """
         SELECT u.id, u.username,
                COALESCE((SELECT SUM(p.points) FROM predictions p WHERE p.user_id = u.id), 0)
                + COALESCE((SELECT SUM(a.points) FROM points_adjustments a WHERE a.user_id = u.id), 0)
