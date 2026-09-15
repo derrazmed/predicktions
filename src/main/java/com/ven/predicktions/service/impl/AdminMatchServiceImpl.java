@@ -7,6 +7,9 @@ import com.ven.predicktions.mapper.MatchMapper;
 import com.ven.predicktions.model.Match;
 import com.ven.predicktions.model.MatchStatus;
 import com.ven.predicktions.model.Prediction;
+import com.ven.predicktions.model.AdminAuditAction;
+import com.ven.predicktions.model.AdminAuditTargetType;
+import com.ven.predicktions.service.AdminAuditService;
 import com.ven.predicktions.repository.MatchRepository;
 import com.ven.predicktions.service.AdminMatchService;
 import com.ven.predicktions.service.PredictionRecalculationService;
@@ -14,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.UUID;
 
@@ -24,15 +28,23 @@ public class AdminMatchServiceImpl implements AdminMatchService {
     private final MatchRepository matchRepository;
     private final PredictionRecalculationService predictionRecalculationService;
     private final MatchMapper matchMapper;
+    private final AdminAuditService auditService;
 
     public AdminMatchServiceImpl(
             MatchRepository matchRepository,
             PredictionRecalculationService predictionRecalculationService,
             MatchMapper matchMapper
     ) {
+        this(matchRepository, predictionRecalculationService, matchMapper, null);
+    }
+    @Autowired
+    public AdminMatchServiceImpl(MatchRepository matchRepository,
+            PredictionRecalculationService predictionRecalculationService,
+            MatchMapper matchMapper, AdminAuditService auditService) {
         this.matchRepository = matchRepository;
         this.predictionRecalculationService = predictionRecalculationService;
         this.matchMapper = matchMapper;
+        this.auditService = auditService;
     }
 
     @Override
@@ -59,6 +71,12 @@ public class AdminMatchServiceImpl implements AdminMatchService {
             match.setStatus(MatchStatus.FINISHED);
             matchRepository.save(match);
             predictionRecalculationService.recalculate(match, adminId);
+            if (auditService != null) {
+                auditService.record(adminId, AdminAuditAction.MATCH_RESULT_CHANGED,
+                        AdminAuditTargetType.MATCH, matchId,
+                        "Changed result from " + previousHomeScore + "-" + previousAwayScore +
+                                " to " + request.homeScore() + "-" + request.awayScore());
+            }
         }
 
         log.info("Admin {} corrected match {} result from {}-{} to {}-{}",
