@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.Instant;
 
@@ -212,13 +213,13 @@ public class GlobalExceptionHandler {
     ) {
         ApiErrorResponse error = new ApiErrorResponse(
                 Instant.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                "INVALID_REQUEST",
+                HttpStatus.CONFLICT.value(),
+                "CONFLICT",
                 exception.getMessage(),
                 request.getRequestURI()
         );
 
-        return ResponseEntity.badRequest().body(error);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
     @ExceptionHandler(LastActiveAdministratorException.class)
@@ -228,12 +229,38 @@ public class GlobalExceptionHandler {
     ) {
         ApiErrorResponse error = new ApiErrorResponse(
                 Instant.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                "INVALID_REQUEST",
+                HttpStatus.CONFLICT.value(),
+                "CONFLICT",
                 exception.getMessage(),
                 request.getRequestURI()
         );
 
-        return ResponseEntity.badRequest().body(error);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(CannotDisableSelfException.class)
+    public ResponseEntity<ApiErrorResponse> handleCannotDisableSelf(
+            CannotDisableSelfException exception, HttpServletRequest request) {
+        return conflict(exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(CannotRemoveOwnAdminRoleException.class)
+    public ResponseEntity<ApiErrorResponse> handleCannotRemoveOwnAdminRole(
+            CannotRemoveOwnAdminRoleException exception, HttpServletRequest request) {
+        return conflict(exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(new ApiErrorResponse(
+                Instant.now(), HttpStatus.BAD_REQUEST.value(), "INVALID_REQUEST",
+                "Request parameter is invalid", request.getRequestURI()));
+    }
+
+    private ResponseEntity<ApiErrorResponse> conflict(String message, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(
+                Instant.now(), HttpStatus.CONFLICT.value(), "CONFLICT",
+                message, request.getRequestURI()));
     }
 }
