@@ -13,6 +13,11 @@ import java.util.UUID;
 public interface PredictionRepository extends JpaRepository<Prediction, UUID>,
         JpaSpecificationExecutor<Prediction> {
 
+    long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            java.time.Instant start,
+            java.time.Instant end
+    );
+
     List<Prediction> findAllByUserId(UUID userId);
 
     long countByUserId(UUID userId);
