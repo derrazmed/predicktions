@@ -74,7 +74,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 user.getCreatedAt(),
                 user.isEnabled(),
                 predictionRepository.countByUserId(userId),
-                predictionRepository.sumPointsByUserId(userId),
+                predictionRepository.sumTotalPointsByUserId(userId),
                 leagues,
                 leaderboardPosition
         );
