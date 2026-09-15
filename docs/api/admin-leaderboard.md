@@ -45,3 +45,33 @@ This returns the existing league leaderboard response for the requested league
 and uses the same ranking implementation as the normal member-only endpoint.
 An unknown league returns `404 Not Found`; invalid UUIDs return `400 Bad
 Request`. Unauthenticated and non-admin requests return `401` and `403`.
+
+## Recalculate the global leaderboard
+
+```http
+POST /api/admin/leaderboard/recalculate
+```
+
+This administrative recovery endpoint requires the `ADMIN` role and has no
+request body. The application calculates leaderboard standings dynamically from
+persisted prediction points (plus existing point adjustments); it does not
+persist leaderboard totals or positions. The operation therefore re-runs the
+existing global leaderboard query and ranking logic without incrementing points
+or creating derived leaderboard state.
+
+Example response:
+
+```json
+{
+  "recalculatedAt": "2026-09-15T10:30:00Z",
+  "usersProcessed": 25,
+  "entriesUpdated": 0,
+  "entriesUnchanged": 25,
+  "message": "Leaderboard recalculated from prediction data."
+}
+```
+
+The operation is idempotent. Use
+`POST /api/admin/matches/{matchId}/recalculate` to repair persisted prediction
+points after a match-result issue; this endpoint only rebuilds the dynamic
+leaderboard view from the current source data.

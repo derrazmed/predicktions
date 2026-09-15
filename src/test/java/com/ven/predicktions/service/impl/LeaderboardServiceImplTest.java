@@ -150,6 +150,25 @@ class LeaderboardServiceImplTest {
     }
 
     @Test
+    void shouldRecalculateFromExistingGlobalLeaderboardWithoutAccumulatingPoints() {
+        when(predictionRepository.findGlobalLeaderboard())
+                .thenReturn(List.of(
+                        new Object[]{UUID.randomUUID(), "alice", 100L},
+                        new Object[]{UUID.randomUUID(), "bob", 80L}
+                ));
+
+        var first = leaderboardService.recalculateGlobalLeaderboard(UUID.randomUUID());
+        var second = leaderboardService.recalculateGlobalLeaderboard(UUID.randomUUID());
+
+        assertEquals(2, first.usersProcessed());
+        assertEquals(0, first.entriesUpdated());
+        assertEquals(2, first.entriesUnchanged());
+        assertEquals(2, second.usersProcessed());
+        assertEquals(0, second.entriesUpdated());
+        verify(predictionRepository, times(2)).findGlobalLeaderboard();
+    }
+
+    @Test
     void shouldRankNegativeAdjustedTotalsUsingExistingOrdering() {
         UUID aliceId = UUID.randomUUID();
         UUID bobId = UUID.randomUUID();
