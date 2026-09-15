@@ -83,8 +83,18 @@ public class LeaderboardServiceImpl implements LeaderboardService {
             );
         }
 
-        List<Object[]> results =
-                predictionRepository.findLeagueLeaderboard(leagueId);
+        return mapLeaderboard(predictionRepository.findLeagueLeaderboard(leagueId));
+    }
+
+    @Override
+    public List<LeaderboardEntryResponse> getLeagueLeaderboardForAdmin(UUID leagueId) {
+        leagueRepository.findById(leagueId)
+                .orElseThrow(() -> new ResourceNotFoundException("League not found"));
+
+        return mapLeaderboard(predictionRepository.findLeagueLeaderboard(leagueId));
+    }
+
+    private List<LeaderboardEntryResponse> mapLeaderboard(List<Object[]> results) {
 
         long previousPoints = Long.MIN_VALUE;
         int currentRank = 0;

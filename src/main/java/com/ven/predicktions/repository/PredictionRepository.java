@@ -35,6 +35,21 @@ public interface PredictionRepository extends JpaRepository<Prediction, UUID>,
     List<Prediction> findAllByMatchId(UUID matchId);
 
     @Query(value = """
+        SELECT COUNT(p.id) AS totalPredictions,
+               COALESCE(SUM(CASE WHEN p.points > 0 THEN 1 ELSE 0 END), 0) AS predictionsWithPoints,
+               COALESCE(SUM(p.points), 0) AS totalPointsAwarded,
+               COALESCE(SUM(CASE WHEN p.predicted_home_score = m.home_score
+                                  AND p.predicted_away_score = m.away_score
+                                  THEN 1 ELSE 0 END), 0) AS exactScorePredictions,
+               COUNT(DISTINCT p.user_id) AS participatingMembers
+        FROM predictions p
+        JOIN matches m ON m.id = p.match_id
+        JOIN league_members lm ON lm.user_id = p.user_id
+        WHERE lm.league_id = :leagueId
+        """, nativeQuery = true)
+    LeaguePredictionStatistics findLeaguePredictionStatistics(@Param("leagueId") UUID leagueId);
+
+    @Query(value = """
         SELECT u.id, u.username,
                COALESCE((SELECT SUM(p.points) FROM predictions p WHERE p.user_id = u.id), 0)
                + COALESCE((SELECT SUM(a.points) FROM points_adjustments a WHERE a.user_id = u.id), 0)
