@@ -39,7 +39,7 @@ public class PointsAdjustment {
             nullable = false,
             foreignKey = @ForeignKey(name = "fk_points_adjustments_awarded_by")
     )
-    private User awardedBy;
+    private User adjustedBy;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -47,11 +47,11 @@ public class PointsAdjustment {
     protected PointsAdjustment() {
     }
 
-    public PointsAdjustment(User user, int points, String reason, User awardedBy) {
+    public PointsAdjustment(User user, int points, String reason, User adjustedBy) {
         this.user = user;
         this.points = points;
         this.reason = reason;
-        this.awardedBy = awardedBy;
+        this.adjustedBy = adjustedBy;
     }
 
     @PrePersist
@@ -75,8 +75,8 @@ public class PointsAdjustment {
         return reason;
     }
 
-    public User getAwardedBy() {
-        return awardedBy;
+    public User getAdjustedBy() {
+        return adjustedBy;
     }
 
     public Instant getCreatedAt() {

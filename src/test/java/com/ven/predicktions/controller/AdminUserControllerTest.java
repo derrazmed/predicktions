@@ -14,7 +14,7 @@ import com.ven.predicktions.config.SecurityConfig;
 import com.ven.predicktions.service.AdminUserService;
 import com.ven.predicktions.service.AdminPredictionService;
 import com.ven.predicktions.service.AdminPointsService;
-import com.ven.predicktions.dto.user.AddPointsResponse;
+import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionResponse;
 import org.junit.jupiter.api.Test;
@@ -169,11 +169,11 @@ class AdminUserControllerTest {
     void shouldAwardPointsForAdminUsingAuthenticatedIdentity() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID adminId = UUID.randomUUID();
-        when(adminPointsService.addPoints(
+        when(adminPointsService.adjustPoints(
                 org.mockito.ArgumentMatchers.eq(userId),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.eq(adminId)
-        )).thenReturn(new AddPointsResponse(
+        )).thenReturn(new PointsAdjustmentResponse(
                 userId, "testuser", 10,
                 "Correction", adminId,
                 Instant.parse("2026-09-14T12:30:00Z")
@@ -185,7 +185,7 @@ class AdminUserControllerTest {
                         .with(adminAuthentication(Role.ADMIN, adminId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(userId.toString()))
-                .andExpect(jsonPath("$.pointsAwarded").value(10))
+                .andExpect(jsonPath("$.points").value(10))
                 .andExpect(jsonPath("$.awardedBy").value(adminId.toString()))
                 .andExpect(jsonPath("$.passwordHash").doesNotExist())
                 .andExpect(jsonPath("$.accessToken").doesNotExist());
@@ -215,9 +215,6 @@ class AdminUserControllerTest {
                         .content("{\"points\":0,\"reason\":\"Correction\"}").with(admin))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(post(path).contentType("application/json")
-                        .content("{\"points\":-1,\"reason\":\"Correction\"}").with(admin))
-                .andExpect(status().isBadRequest());
-        mockMvc.perform(post(path).contentType("application/json")
                         .content("{\"points\":1,\"reason\":\"   \"}").with(admin))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(post(path).contentType("application/json")
@@ -225,6 +222,50 @@ class AdminUserControllerTest {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(post(path).contentType("application/json")
                         .content("{\"points\":1,\"reason\":\"x\"").with(admin))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldAcceptNegativePointAdjustmentForAdmin() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        when(adminPointsService.adjustPoints(
+                org.mockito.ArgumentMatchers.eq(userId),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(adminId)
+        )).thenReturn(new PointsAdjustmentResponse(
+                userId, "testuser", -5, "Manual correction", adminId,
+                Instant.parse("2026-09-14T12:30:00Z")
+        ));
+
+        mockMvc.perform(post("/api/admin/users/" + userId + "/points")
+                        .contentType("application/json")
+                        .content("{\"points\":-5,\"reason\":\"Manual correction\"}")
+                        .with(adminAuthentication(Role.ADMIN, adminId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.points").value(-5))
+                .andExpect(jsonPath("$.reason").value("Manual correction"));
+    }
+
+    @Test
+    void shouldRejectPointAdjustmentOutsideConfiguredBounds() throws Exception {
+        String path = "/api/admin/users/" + UUID.randomUUID() + "/points";
+
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{\"points\":1000001,\"reason\":\"Correction\"}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{\"points\":-1000001,\"reason\":\"Correction\"}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{\"points\":-5,\"reason\":\"\"}")
+                        .with(adminAuthentication(Role.ADMIN)))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(path).contentType("application/json")
+                        .content("{\"points\":-5,\"reason\":\"" + "x".repeat(501) + "\"}")
+                        .with(adminAuthentication(Role.ADMIN)))
                 .andExpect(status().isBadRequest());
     }
 

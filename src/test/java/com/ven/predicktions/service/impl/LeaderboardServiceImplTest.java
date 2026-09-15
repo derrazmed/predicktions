@@ -129,4 +129,24 @@ class LeaderboardServiceImplTest {
         verify(predictionRepository, times(1))
                 .findGlobalLeaderboard();
     }
+
+    @Test
+    void shouldRankNegativeAdjustedTotalsUsingExistingOrdering() {
+        UUID aliceId = UUID.randomUUID();
+        UUID bobId = UUID.randomUUID();
+
+        when(predictionRepository.findGlobalLeaderboard())
+                .thenReturn(List.of(
+                        new Object[]{bobId, "bob", 95L},
+                        new Object[]{aliceId, "alice", 90L}
+                ));
+
+        List<LeaderboardEntryResponse> result =
+                leaderboardService.getGlobalLeaderboard();
+
+        assertEquals("bob", result.get(0).username());
+        assertEquals(95L, result.get(0).totalPoints());
+        assertEquals("alice", result.get(1).username());
+        assertEquals(90L, result.get(1).totalPoints());
+    }
 }

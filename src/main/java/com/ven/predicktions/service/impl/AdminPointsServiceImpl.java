@@ -1,7 +1,7 @@
 package com.ven.predicktions.service.impl;
 
-import com.ven.predicktions.dto.user.AddPointsRequest;
-import com.ven.predicktions.dto.user.AddPointsResponse;
+import com.ven.predicktions.dto.user.PointsAdjustmentRequest;
+import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.model.PointsAdjustment;
 import com.ven.predicktions.model.User;
@@ -29,9 +29,9 @@ public class AdminPointsServiceImpl implements AdminPointsService {
 
     @Override
     @Transactional
-    public AddPointsResponse addPoints(
+    public PointsAdjustmentResponse adjustPoints(
             UUID userId,
-            AddPointsRequest request,
+            PointsAdjustmentRequest request,
             UUID adminUserId
     ) {
         User user = userRepository.findById(userId)
@@ -48,7 +48,7 @@ public class AdminPointsServiceImpl implements AdminPointsService {
                 )
         );
 
-        return new AddPointsResponse(
+        return new PointsAdjustmentResponse(
                 user.getId(),
                 user.getUsername(),
                 adjustment.getPoints(),

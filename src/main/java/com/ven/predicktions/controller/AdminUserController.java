@@ -5,8 +5,8 @@ import com.ven.predicktions.dto.user.AdminUserDetailsResponse;
 import com.ven.predicktions.dto.user.AdminUserResponse;
 import com.ven.predicktions.dto.user.ChangeUserRoleRequest;
 import com.ven.predicktions.dto.user.ChangeUserStatusRequest;
-import com.ven.predicktions.dto.user.AddPointsRequest;
-import com.ven.predicktions.dto.user.AddPointsResponse;
+import com.ven.predicktions.dto.user.PointsAdjustmentRequest;
+import com.ven.predicktions.dto.user.PointsAdjustmentResponse;
 import com.ven.predicktions.dto.prediction.AdminPredictionPageResponse;
 import com.ven.predicktions.service.AdminPointsService;
 import com.ven.predicktions.service.AdminPredictionService;
@@ -90,14 +90,14 @@ public class AdminUserController {
     }
 
     @PostMapping("/{userId}/points")
-    public ResponseEntity<AddPointsResponse> addPoints(
+    public ResponseEntity<PointsAdjustmentResponse> adjustPoints(
             @PathVariable UUID userId,
-            @Valid @RequestBody AddPointsRequest request,
+            @Valid @RequestBody PointsAdjustmentRequest request,
             Authentication authentication
     ) {
         UUID adminUserId = (UUID) authentication.getPrincipal();
         return ResponseEntity.ok(
-                adminPointsService.addPoints(userId, request, adminUserId)
+                adminPointsService.adjustPoints(userId, request, adminUserId)
         );
     }
 }
