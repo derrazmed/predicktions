@@ -5,6 +5,7 @@ import com.ven.predicktions.dto.league.AdminLeagueDetailsResponse;
 import com.ven.predicktions.service.AdminLeagueService;
 import com.ven.predicktions.service.AdminLeagueDetailsService;
 import com.ven.predicktions.service.AdminLeagueDeletionService;
+import com.ven.predicktions.service.AdminLeagueMembershipService;
 import org.springframework.web.bind.annotation.PathVariable;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -22,15 +23,18 @@ public class AdminLeagueController {
     private final AdminLeagueService adminLeagueService;
     private final AdminLeagueDetailsService adminLeagueDetailsService;
     private final AdminLeagueDeletionService adminLeagueDeletionService;
+    private final AdminLeagueMembershipService adminLeagueMembershipService;
 
     public AdminLeagueController(
             AdminLeagueService adminLeagueService,
             AdminLeagueDetailsService adminLeagueDetailsService,
-            AdminLeagueDeletionService adminLeagueDeletionService
+            AdminLeagueDeletionService adminLeagueDeletionService,
+            AdminLeagueMembershipService adminLeagueMembershipService
     ) {
         this.adminLeagueService = adminLeagueService;
         this.adminLeagueDetailsService = adminLeagueDetailsService;
         this.adminLeagueDeletionService = adminLeagueDeletionService;
+        this.adminLeagueMembershipService = adminLeagueMembershipService;
     }
 
     @GetMapping
@@ -55,6 +59,20 @@ public class AdminLeagueController {
     ) {
         adminLeagueDeletionService.deleteLeague(
                 leagueId,
+                (UUID) authentication.getPrincipal()
+        );
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{leagueId}/members/{userId}")
+    public ResponseEntity<Void> removeMember(
+            @PathVariable UUID leagueId,
+            @PathVariable UUID userId,
+            Authentication authentication
+    ) {
+        adminLeagueMembershipService.removeMember(
+                leagueId,
+                userId,
                 (UUID) authentication.getPrincipal()
         );
         return ResponseEntity.noContent().build();

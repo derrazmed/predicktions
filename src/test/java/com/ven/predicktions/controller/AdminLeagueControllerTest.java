@@ -15,6 +15,7 @@ import com.ven.predicktions.security.JwtService;
 import com.ven.predicktions.service.AdminLeagueService;
 import com.ven.predicktions.service.AdminLeagueDetailsService;
 import com.ven.predicktions.service.AdminLeagueDeletionService;
+import com.ven.predicktions.service.AdminLeagueMembershipService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -35,6 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 @WebMvcTest(AdminLeagueController.class)
 @Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class})
@@ -51,6 +53,9 @@ class AdminLeagueControllerTest {
 
     @MockitoBean
     private AdminLeagueDeletionService adminLeagueDeletionService;
+
+    @MockitoBean
+    private AdminLeagueMembershipService adminLeagueMembershipService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -168,6 +173,29 @@ class AdminLeagueControllerTest {
     void shouldRejectLeagueDeletionForNonAdminAndUnauthenticatedRequests() throws Exception {
         UUID leagueId = UUID.randomUUID();
         String path = "/api/admin/leagues/" + leagueId;
+
+        mockMvc.perform(delete(path).with(authentication(Role.USER)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete(path))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldRemoveLeagueMemberForAdmin() throws Exception {
+        UUID leagueId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/admin/leagues/{leagueId}/members/{userId}", leagueId, userId)
+                        .with(authentication(Role.ADMIN)))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+    }
+
+    @Test
+    void shouldRejectMemberRemovalForNonAdminAndUnauthenticatedRequests() throws Exception {
+        UUID leagueId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        String path = "/api/admin/leagues/" + leagueId + "/members/" + userId;
 
         mockMvc.perform(delete(path).with(authentication(Role.USER)))
                 .andExpect(status().isForbidden());
