@@ -104,6 +104,10 @@ public class Prediction {
         return points;
     }
 
+    public void setPoints(Integer points) {
+        this.points = points;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
