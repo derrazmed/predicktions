@@ -14,6 +14,17 @@ Predicktions is a sports prediction application where authenticated users submit
 - Maven
 - Testcontainers
 
+## Run with Docker
+
+The whole application (frontend, backend and PostgreSQL) runs from the
+repository root with a single command:
+
+```bash
+docker compose up --build
+```
+
+See the [root README](../README.md) for configuration, ports and commands.
+
 ## Local Development
 
 ### Prerequisites

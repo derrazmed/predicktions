@@ -3,6 +3,8 @@ package com.ven.predicktions.repository;
 import com.ven.predicktions.model.Match;
 import com.ven.predicktions.model.MatchStatus;
 import com.ven.predicktions.model.Prediction;
+import com.ven.predicktions.model.League;
+import com.ven.predicktions.model.Role;
 import com.ven.predicktions.model.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +42,12 @@ class PredictionRepositoryTest {
 
     @Autowired
     private MatchRepository matchRepository;
+
+    @Autowired
+    private LeagueRepository leagueRepository;
+
+    @Autowired
+    private LeagueMemberRepository leagueMemberRepository;
 
     @Test
     void shouldSaveAndFindPredictionById() {
@@ -122,6 +130,42 @@ class PredictionRepositoryTest {
                 predictionRepository.findAllByMatchId(match.getId());
 
         assertThat(predictions).hasSize(2);
+    }
+
+    @Test
+    void shouldExcludeAdministratorsFromAllLeaderboardQueries() {
+        User user = createUser("leaderboard-user");
+        User admin = userRepository.save(new User(
+                "leaderboard-admin",
+                "leaderboard-admin@example.com",
+                "hashed-password",
+                Role.ADMIN
+        ));
+        Match match = createMatch("leaderboard-match");
+
+        Prediction userPrediction = new Prediction(user, match, 2, 1);
+        userPrediction.setPoints(20);
+        predictionRepository.save(userPrediction);
+
+        Prediction adminPrediction = new Prediction(admin, match, 3, 0);
+        adminPrediction.setPoints(100);
+        predictionRepository.save(adminPrediction);
+
+        League league = new League("Leaderboard League", user, "LEADER01");
+        league.addMember(admin);
+        league = leagueRepository.save(league);
+
+        assertThat(leagueMemberRepository.existsByLeagueIdAndUserId(league.getId(), admin.getId()))
+                .isTrue();
+        assertThat(predictionRepository.findGlobalLeaderboard())
+                .extracting(row -> row[0])
+                .containsExactly(user.getId());
+        assertThat(predictionRepository.findGlobalLeaderboard(null, null))
+                .extracting(row -> row[0])
+                .containsExactly(user.getId());
+        assertThat(predictionRepository.findLeagueLeaderboard(league.getId()))
+                .extracting(row -> row[0])
+                .containsExactly(user.getId());
     }
 
     private User createUser() {

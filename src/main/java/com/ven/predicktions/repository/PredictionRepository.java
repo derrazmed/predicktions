@@ -60,6 +60,7 @@ public interface PredictionRepository extends JpaRepository<Prediction, UUID>,
                + COALESCE((SELECT SUM(a.points) FROM points_adjustments a WHERE a.user_id = u.id), 0)
                AS total_points
         FROM users u
+        WHERE u.role = 'USER'
         ORDER BY total_points DESC, u.username ASC
         """, nativeQuery = true)
     List<Object[]> findGlobalLeaderboard();
@@ -69,7 +70,8 @@ public interface PredictionRepository extends JpaRepository<Prediction, UUID>,
         FROM predictions p
         JOIN users u ON u.id = p.user_id
         JOIN matches m ON m.id = p.match_id
-        WHERE (:season IS NULL OR EXTRACT(YEAR FROM (m.kickoff_at AT TIME ZONE 'UTC')) = :season)
+        WHERE u.role = 'USER'
+          AND (:season IS NULL OR EXTRACT(YEAR FROM (m.kickoff_at AT TIME ZONE 'UTC')) = :season)
           AND (:gameweek IS NULL OR EXTRACT(ISOWeek FROM (m.kickoff_at AT TIME ZONE 'UTC')) = :gameweek)
         GROUP BY u.id, u.username
         ORDER BY total_points DESC, u.username ASC
@@ -87,6 +89,7 @@ public interface PredictionRepository extends JpaRepository<Prediction, UUID>,
         FROM league_members lm
         JOIN users u ON u.id = lm.user_id
         WHERE lm.league_id = :leagueId
+          AND u.role = 'USER'
         ORDER BY total_points DESC, u.username ASC
         """, nativeQuery = true)
     List<Object[]> findLeagueLeaderboard(@Param("leagueId") UUID leagueId);

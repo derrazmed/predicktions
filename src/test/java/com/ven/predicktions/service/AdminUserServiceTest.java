@@ -114,6 +114,33 @@ class AdminUserServiceTest {
     }
 
     @Test
+    void shouldLeaveAdministratorOutOfLeaderboardPositionButKeepDetails() {
+        UUID userId = UUID.randomUUID();
+        User admin = new User(
+                "admin",
+                "admin@example.com",
+                "secret-hash",
+                Role.ADMIN
+        );
+        when(userRepository.findById(userId)).thenReturn(java.util.Optional.of(admin));
+        when(predictionRepository.countByUserId(userId)).thenReturn(7L);
+        when(predictionRepository.sumTotalPointsByUserId(userId)).thenReturn(31L);
+        when(leagueMemberRepository.findAllByUserId(userId)).thenReturn(List.of());
+
+        AdminUserDetailsResponse response = new AdminUserServiceImpl(
+                userRepository,
+                predictionRepository,
+                leagueMemberRepository,
+                leaderboardService
+        ).getUser(userId);
+
+        assertThat(response.predictionCount()).isEqualTo(7);
+        assertThat(response.points()).isEqualTo(31);
+        assertThat(response.leaderboardPosition()).isNull();
+        verify(leaderboardService, org.mockito.Mockito.never()).getGlobalLeaderboard();
+    }
+
+    @Test
     void shouldPromoteUserToAdmin() {
         UUID userId = UUID.randomUUID();
         User user = new User("user", "user@example.com", "hash", Role.USER);

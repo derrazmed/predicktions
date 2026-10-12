@@ -67,12 +67,15 @@ public class AdminUserServiceImpl implements AdminUserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        Integer leaderboardPosition = leaderboardService.getGlobalLeaderboard()
-                .stream()
-                .filter(entry -> entry.userId().equals(userId))
-                .map(entry -> entry.rank())
-                .findFirst()
-                .orElse(null);
+        Integer leaderboardPosition = null;
+        if (user.getRole() == Role.USER) {
+            leaderboardPosition = leaderboardService.getGlobalLeaderboard()
+                    .stream()
+                    .filter(entry -> entry.userId().equals(userId))
+                    .map(entry -> entry.rank())
+                    .findFirst()
+                    .orElse(null);
+        }
 
         List<AdminLeagueSummary> leagues = leagueMemberRepository
                 .findAllByUserId(userId)

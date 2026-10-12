@@ -28,8 +28,8 @@ class AdminDashboardServiceTest {
 
     @Test
     void shouldAggregateAllDashboardStatistics() {
-        when(userRepository.count()).thenReturn(152L);
-        when(userRepository.countByEnabledTrue()).thenReturn(121L);
+        when(userRepository.countByRole(Role.USER)).thenReturn(150L);
+        when(userRepository.countByRoleAndEnabledTrue(Role.USER)).thenReturn(121L);
         when(userRepository.countByRole(Role.ADMIN)).thenReturn(2L);
         when(leagueRepository.count()).thenReturn(34L);
         when(predictionRepository.count()).thenReturn(4821L);
@@ -42,7 +42,7 @@ class AdminDashboardServiceTest {
                 userRepository, leagueRepository, predictionRepository, matchRepository
         ).getDashboard();
 
-        assertThat(response.users()).isEqualTo(152);
+        assertThat(response.users()).isEqualTo(150);
         assertThat(response.activeUsers()).isEqualTo(121);
         assertThat(response.admins()).isEqualTo(2);
         assertThat(response.leagues()).isEqualTo(34);
@@ -53,8 +53,8 @@ class AdminDashboardServiceTest {
 
     @Test
     void shouldUseAnExplicitUtcDayRangeForToday() {
-        when(userRepository.count()).thenReturn(0L);
-        when(userRepository.countByEnabledTrue()).thenReturn(0L);
+        when(userRepository.countByRole(Role.USER)).thenReturn(0L);
+        when(userRepository.countByRoleAndEnabledTrue(Role.USER)).thenReturn(0L);
         when(userRepository.countByRole(Role.ADMIN)).thenReturn(0L);
         when(leagueRepository.count()).thenReturn(0L);
         when(predictionRepository.count()).thenReturn(0L);

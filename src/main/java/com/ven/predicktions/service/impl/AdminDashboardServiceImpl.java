@@ -43,8 +43,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         Instant startOfTomorrow = startOfToday.plus(java.time.Duration.ofDays(1));
 
         return new AdminDashboardResponse(
-                userRepository.count(),
-                userRepository.countByEnabledTrue(),
+                userRepository.countByRole(Role.USER),
+                userRepository.countByRoleAndEnabledTrue(Role.USER),
                 userRepository.countByRole(Role.ADMIN),
                 leagueRepository.count(),
                 predictionRepository.count(),

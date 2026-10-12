@@ -1,0 +1,28 @@
+# Build output — never copied into the image (the JAR is built inside Docker).
+target/
+
+# Version control.
+.git/
+.gitignore
+
+# IDE / editor metadata.
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Local environment files and secrets.
+.env
+.env.*
+!.env.example
+
+# Documentation and local orchestration are not needed to build the image.
+docs/
+README.md
+docker-compose.yml
+Dockerfile
+
+# Misc.
+*.log
+.DS_Store
