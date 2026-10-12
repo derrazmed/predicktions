@@ -12,6 +12,19 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION:3600000}
 
+admin:
+  # Promote an already-registered user (by email) to ADMIN on one startup.
+  bootstrap:
+    email: ${ADMIN_BOOTSTRAP_EMAIL:}
+
+  # Create the initial administrator account on the first startup, but only
+  # when no administrator exists yet and all three values are set. Never put
+  # real credentials in this file; provide them through the environment.
+  initial:
+    name: ${ADMIN_INITIAL_NAME:}
+    email: ${ADMIN_INITIAL_EMAIL:}
+    password: ${ADMIN_INITIAL_PASSWORD:}
+
 app:
   cors:
     # Comma-separated list of exact browser origins allowed to call the API

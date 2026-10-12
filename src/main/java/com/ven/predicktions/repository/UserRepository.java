@@ -24,6 +24,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
 
+    /**
+     * Case-insensitive email lookup, used by the initial administrator
+     * bootstrap so a configured email cannot slip past the existing-user
+     * check because of different letter casing.
+     */
+    Optional<User> findByEmailIgnoreCase(String email);
+
     boolean existsByUsername(String username);
 
     boolean existsByEmail(String email);
