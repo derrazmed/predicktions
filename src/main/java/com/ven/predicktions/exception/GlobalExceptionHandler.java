@@ -258,6 +258,20 @@ public class GlobalExceptionHandler {
                 "Request parameter is invalid", request.getRequestURI()));
     }
 
+    @ExceptionHandler(GameweekNotCompletedException.class)
+    public ResponseEntity<ApiErrorResponse> handleGameweekNotCompleted(
+            GameweekNotCompletedException exception, HttpServletRequest request) {
+        ApiErrorResponse error = new ApiErrorResponse(
+                Instant.now(),
+                HttpStatus.CONFLICT.value(),
+                "GAMEWEEK_NOT_COMPLETED",
+                exception.getMessage(),
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
     private ResponseEntity<ApiErrorResponse> conflict(String message, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(
                 Instant.now(), HttpStatus.CONFLICT.value(), "CONFLICT",

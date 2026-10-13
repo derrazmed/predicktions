@@ -125,6 +125,19 @@ Predictions cannot be created for finished or cancelled matches.
 
 See `docs/api/predictions.md` for endpoint details, request/response examples, authentication, validation, duplicate behavior, locking rules, and error responses.
 
+## League Prediction Comparison API
+
+League members can compare each other's predictions once a gameweek is complete:
+
+```text
+GET /api/leagues/{leagueId}/comparisons/gameweeks
+GET /api/leagues/{leagueId}/comparisons/gameweeks/{season}/{gameweek}
+```
+
+Only members of the league can access these endpoints, and a gameweek is revealed only after all of its matches are final and predictions are scored.
+
+See `docs/api/league-comparisons.md` for visibility rules, authorization, response formats, and error responses.
+
 ## Testing
 
 Run the complete test suite:

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,6 +39,25 @@ public interface PredictionRepository extends JpaRepository<Prediction, UUID>,
     Optional<Prediction> findByUserIdAndMatchId(UUID userId, UUID matchId);
 
     List<Prediction> findAllByMatchId(UUID matchId);
+
+    @Query("""
+        SELECT p FROM Prediction p
+        JOIN FETCH p.match
+        WHERE p.match.id IN :matchIds
+        """)
+    List<Prediction> findAllByMatchIdIn(@Param("matchIds") Collection<UUID> matchIds);
+
+    @Query("""
+        SELECT p FROM Prediction p
+        JOIN FETCH p.user
+        JOIN FETCH p.match
+        WHERE p.match.id IN :matchIds
+          AND p.user.id IN :userIds
+        """)
+    List<Prediction> findAllByMatchIdInAndUserIdIn(
+            @Param("matchIds") Collection<UUID> matchIds,
+            @Param("userIds") Collection<UUID> userIds
+    );
 
     @Query(value = """
         SELECT COUNT(p.id) AS totalPredictions,

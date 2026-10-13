@@ -70,7 +70,7 @@ public class PredictionRecalculationServiceImpl implements PredictionRecalculati
                 processed - updated,
                 Instant.now()
         );
-        if (auditService != null) {
+        if (auditService != null && adminId != null) {
             auditService.record(adminId, AdminAuditAction.PREDICTIONS_RECALCULATED,
                     AdminAuditTargetType.MATCH, match.getId(),
                     "Recalculated predictions: processed=" + processed + ", updated=" + updated +

@@ -6,6 +6,7 @@ import com.ven.predicktions.dto.match.MatchSyncRequest;
 import com.ven.predicktions.model.Match;
 import com.ven.predicktions.model.MatchStatus;
 import com.ven.predicktions.repository.MatchRepository;
+import com.ven.predicktions.service.PredictionRecalculationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +31,9 @@ class MatchSyncServiceImplTest {
 
     @Mock
     private MatchRepository matchRepository;
+
+    @Mock
+    private PredictionRecalculationService predictionRecalculationService;
 
     private MatchSyncServiceImpl matchSyncService;
 
@@ -328,5 +332,77 @@ class MatchSyncServiceImplTest {
 
         assertThat(existingMatch.getStatus())
                 .isEqualTo(MatchStatus.FINISHED);
+    }
+
+    @Test
+    void shouldRecalculatePredictionsWhenSyncedMatchIsFinished() {
+        SportsMatch finished = new SportsMatch(
+                "575340",
+                "Home",
+                "Away",
+                Instant.parse("2026-09-11T19:00:00Z"),
+                2,
+                1,
+                MatchStatus.FINISHED
+        );
+
+        Match existing = new Match(
+                "575340",
+                "Home",
+                "Away",
+                Instant.parse("2026-09-11T19:00:00Z"),
+                MatchStatus.SCHEDULED
+        );
+
+        MatchSyncServiceImpl serviceWithRecalculation = new MatchSyncServiceImpl(
+                sportsProvider,
+                matchRepository,
+                predictionRecalculationService
+        );
+
+        when(sportsProvider.getMatchdayMatches("CL", 5))
+                .thenReturn(List.of(finished));
+
+        when(matchRepository.findByExternalId("575340"))
+                .thenReturn(Optional.of(existing));
+
+        when(matchRepository.save(any(Match.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        serviceWithRecalculation.synchronizeResults("CL", 5);
+
+        verify(predictionRecalculationService).recalculate(existing, null);
+    }
+
+    @Test
+    void shouldNotRecalculatePredictionsWhenMatchHasNoResult() {
+        SportsMatch scheduled = new SportsMatch(
+                "575341",
+                "Home",
+                "Away",
+                Instant.parse("2026-09-11T19:00:00Z"),
+                null,
+                null,
+                MatchStatus.SCHEDULED
+        );
+
+        MatchSyncServiceImpl serviceWithRecalculation = new MatchSyncServiceImpl(
+                sportsProvider,
+                matchRepository,
+                predictionRecalculationService
+        );
+
+        when(sportsProvider.getCompetitionMatches("CL"))
+                .thenReturn(List.of(scheduled));
+
+        when(matchRepository.findByExternalId("575341"))
+                .thenReturn(Optional.empty());
+
+        when(matchRepository.save(any(Match.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        serviceWithRecalculation.synchronizeFixtures("CL");
+
+        verify(predictionRecalculationService, never()).recalculate(any(Match.class), any());
     }
 }

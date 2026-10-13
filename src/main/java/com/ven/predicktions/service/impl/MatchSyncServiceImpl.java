@@ -5,8 +5,11 @@ import com.ven.predicktions.dto.match.MatchSyncRequest;
 import com.ven.predicktions.dto.match.MatchSyncResponse;
 import com.ven.predicktions.integration.sports.SportsProvider;
 import com.ven.predicktions.model.Match;
+import com.ven.predicktions.model.MatchStatus;
 import com.ven.predicktions.repository.MatchRepository;
 import com.ven.predicktions.service.MatchSyncService;
+import com.ven.predicktions.service.PredictionRecalculationService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,13 +21,24 @@ public class MatchSyncServiceImpl implements MatchSyncService {
 
     private final SportsProvider sportsProvider;
     private final MatchRepository matchRepository;
+    private final PredictionRecalculationService predictionRecalculationService;
 
     public MatchSyncServiceImpl(
             SportsProvider sportsProvider,
             MatchRepository matchRepository
     ) {
+        this(sportsProvider, matchRepository, null);
+    }
+
+    @Autowired
+    public MatchSyncServiceImpl(
+            SportsProvider sportsProvider,
+            MatchRepository matchRepository,
+            PredictionRecalculationService predictionRecalculationService
+    ) {
         this.sportsProvider = sportsProvider;
         this.matchRepository = matchRepository;
+        this.predictionRecalculationService = predictionRecalculationService;
     }
 
     @Override
@@ -94,6 +108,7 @@ public class MatchSyncServiceImpl implements MatchSyncService {
                     sportsMatch.awayScore(), sportsMatch.status()
             );
             matchRepository.save(match);
+            recalculateIfFinished(match);
         }
         return new MatchSyncResponse(
                 sportsMatches.size(), created, updated, resultsUpdated, 0, Instant.now()
@@ -125,6 +140,19 @@ public class MatchSyncServiceImpl implements MatchSyncService {
             );
 
             matchRepository.save(match);
+            recalculateIfFinished(match);
+        }
+    }
+
+    private void recalculateIfFinished(Match match) {
+        if (predictionRecalculationService == null) {
+            return;
+        }
+
+        if (match.getStatus() == MatchStatus.FINISHED
+                && match.getHomeScore() != null
+                && match.getAwayScore() != null) {
+            predictionRecalculationService.recalculate(match, null);
         }
     }
 }
