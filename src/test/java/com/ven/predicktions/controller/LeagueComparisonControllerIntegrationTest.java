@@ -338,6 +338,52 @@ class LeagueComparisonControllerIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    @Test
+    void multipleCompletedGameweeksAreListedNewestFirst() throws Exception {
+        Instant earlier = Instant.parse("2026-04-06T18:00:00Z");
+        Instant later = Instant.parse("2026-04-20T18:00:00Z");
+
+        Match earlierMatch = createMatch("gw-multi-earlier", earlier, MatchStatus.FINISHED, 1, 0);
+        createPrediction(alice, earlierMatch, 1, 0, 3);
+
+        Match laterMatch = createMatch("gw-multi-later", later, MatchStatus.FINISHED, 2, 2);
+        createPrediction(alice, laterMatch, 2, 2, 3);
+
+        String token = loginAndGetToken(viewer.getUsername());
+
+        ResponseEntity<String> response = get(token, gameweeksPath());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode gameweeks = objectMapper.readTree(response.getBody());
+        assertThat(gameweeks).hasSize(2);
+        assertThat(gameweeks.get(0).get("gameweek").asInt()).isEqualTo(isoWeek(later));
+        assertThat(gameweeks.get(0).get("season").asInt()).isEqualTo(season(later));
+        assertThat(gameweeks.get(1).get("gameweek").asInt()).isEqualTo(isoWeek(earlier));
+
+        assertThat(get(token, gameweekPath(later)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(get(token, gameweekPath(earlier)).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void memberWithoutPredictionIsRevealedAsNoPrediction() throws Exception {
+        Match match = createMatch("gw-missing-member", COMPLETED_KICKOFF, MatchStatus.FINISHED, 2, 1);
+        createPrediction(viewer, match, 2, 1, 3);
+
+        String token = loginAndGetToken(viewer.getUsername());
+
+        ResponseEntity<String> response = get(token, gameweekPath(COMPLETED_KICKOFF));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("members")).hasSize(3);
+
+        JsonNode alicePrediction = predictionFor(body.get("matches").get(0), alice.getUsername());
+        assertThat(alicePrediction.get("outcome").asText()).isEqualTo("NO_PREDICTION");
+        assertThat(alicePrediction.get("predictedHomeScore").isNull()).isTrue();
+        assertThat(alicePrediction.get("predictedAwayScore").isNull()).isTrue();
+        assertThat(alicePrediction.get("points").isNull()).isTrue();
+    }
+
     private String gameweeksPath() {
         return "/api/leagues/" + league.getId() + "/comparisons/gameweeks";
     }
