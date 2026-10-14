@@ -39,11 +39,14 @@ public class FootballDataSportsProvider implements SportsProvider {
 
         return response.matches()
                 .stream()
-                .map(this::toSportsMatch)
+                .map(match -> toSportsMatch(competitionCode, match))
                 .toList();
     }
 
-    private SportsMatch toSportsMatch(FootballDataMatch match) {
+    private SportsMatch toSportsMatch(
+            String competitionCode,
+            FootballDataMatch match
+    ) {
 
         Integer homeScore = match.score() != null
                 ? match.score().fullTime().home()
@@ -60,8 +63,23 @@ public class FootballDataSportsProvider implements SportsProvider {
                 match.utcDate(),
                 homeScore,
                 awayScore,
-                mapStatus(match.status())
+                mapStatus(match.status()),
+                competitionCode,
+                resolveSeason(match.season()),
+                match.matchday()
         );
+    }
+
+    private Integer resolveSeason(FootballDataSeason season) {
+        if (season == null) {
+            return null;
+        }
+
+        if (season.id() != null) {
+            return season.id();
+        }
+
+        return season.startDate() != null ? season.startDate().getYear() : null;
     }
 
     private MatchStatus mapStatus(String status) {
@@ -95,7 +113,7 @@ public class FootballDataSportsProvider implements SportsProvider {
 
         return response.matches()
                 .stream()
-                .map(this::toSportsMatch)
+                .map(match -> toSportsMatch(competitionCode, match))
                 .toList();
     }
 
@@ -119,6 +137,6 @@ public class FootballDataSportsProvider implements SportsProvider {
         if (response == null || response.matches() == null) {
             return List.of();
         }
-        return response.matches().stream().map(this::toSportsMatch).toList();
+        return response.matches().stream().map(match -> toSportsMatch(competitionCode, match)).toList();
     }
 }

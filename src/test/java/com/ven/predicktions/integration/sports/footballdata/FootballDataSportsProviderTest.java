@@ -203,6 +203,49 @@ class FootballDataSportsProviderTest {
     }
 
     @Test
+    void shouldMapGameweekIdentityFromProvider() {
+
+        String responseBody = """
+                {
+                  "matches": [
+                    {
+                      "id": 575500,
+                      "utcDate": "2026-09-10T16:45:00Z",
+                      "status": "TIMED",
+                      "matchday": 1,
+                      "season": {
+                        "id": 2026,
+                        "startDate": "2026-09-08",
+                        "endDate": "2027-06-05",
+                        "currentMatchday": 1
+                      },
+                      "homeTeam": { "id": 1, "name": "Home FC" },
+                      "awayTeam": { "id": 2, "name": "Away FC" },
+                      "score": { "fullTime": { "home": null, "away": null } }
+                    }
+                  ]
+                }
+                """;
+
+        mockServer.expect(requestTo(
+                        "https://api.football-data.org/v4/competitions/CL/matches?matchday=1"
+                ))
+                .andExpect(method(GET))
+                .andRespond(withSuccess(
+                        responseBody,
+                        MediaType.APPLICATION_JSON
+                ));
+
+        SportsMatch match = provider.getMatchdayMatches("CL", 1).getFirst();
+
+        assertThat(match.competitionCode()).isEqualTo("CL");
+        assertThat(match.season()).isEqualTo(2026);
+        assertThat(match.matchday()).isEqualTo(1);
+
+        mockServer.verify();
+    }
+
+    @Test
     void shouldReturnEmptyListWhenResponseContainsNoMatches() {
 
         String responseBody = """

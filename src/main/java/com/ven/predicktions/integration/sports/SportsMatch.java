@@ -11,6 +11,36 @@ public record SportsMatch(
         Instant kickoffAt,
         Integer homeScore,
         Integer awayScore,
-        MatchStatus status
+        MatchStatus status,
+        String competitionCode,
+        Integer season,
+        Integer matchday
 ) {
+
+    /**
+     * Provider-neutral match identity is optional so callers that only care
+     * about fixtures/results (and tests) can omit it.
+     */
+    public SportsMatch(
+            String externalId,
+            String homeTeam,
+            String awayTeam,
+            Instant kickoffAt,
+            Integer homeScore,
+            Integer awayScore,
+            MatchStatus status
+    ) {
+        this(
+                externalId,
+                homeTeam,
+                awayTeam,
+                kickoffAt,
+                homeScore,
+                awayScore,
+                status,
+                null,
+                null,
+                null
+        );
+    }
 }

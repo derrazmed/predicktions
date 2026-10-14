@@ -24,18 +24,19 @@ public class LeagueComparisonController {
     }
 
     @GetMapping("/gameweeks")
-    public List<GameweekSummaryResponse> getCompletedGameweeks(
+    public List<GameweekSummaryResponse> getGameweeks(
             @PathVariable UUID leagueId,
             Authentication authentication
     ) {
         UUID userId = (UUID) authentication.getPrincipal();
 
-        return leagueComparisonService.getCompletedGameweeks(userId, leagueId);
+        return leagueComparisonService.getGameweeks(userId, leagueId);
     }
 
-    @GetMapping("/gameweeks/{season}/{gameweek}")
+    @GetMapping("/gameweeks/{competition}/{season}/{gameweek}")
     public GameweekComparisonResponse getGameweekComparison(
             @PathVariable UUID leagueId,
+            @PathVariable String competition,
             @PathVariable int season,
             @PathVariable int gameweek,
             @RequestParam(required = false) UUID memberId,
@@ -46,6 +47,7 @@ public class LeagueComparisonController {
         return leagueComparisonService.getGameweekComparison(
                 userId,
                 leagueId,
+                competition,
                 season,
                 gameweek,
                 memberId

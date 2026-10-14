@@ -91,7 +91,10 @@ public class MatchSyncServiceImpl implements MatchSyncService {
                         sportsMatch.homeTeam(),
                         sportsMatch.awayTeam(),
                         sportsMatch.kickoffAt(),
-                        sportsMatch.status()
+                        sportsMatch.status(),
+                        sportsMatch.competitionCode(),
+                        sportsMatch.season(),
+                        sportsMatch.matchday()
                 );
                 created++;
             } else {
@@ -105,7 +108,9 @@ public class MatchSyncServiceImpl implements MatchSyncService {
             match.updateFrom(
                     sportsMatch.homeTeam(), sportsMatch.awayTeam(),
                     sportsMatch.kickoffAt(), sportsMatch.homeScore(),
-                    sportsMatch.awayScore(), sportsMatch.status()
+                    sportsMatch.awayScore(), sportsMatch.status(),
+                    sportsMatch.competitionCode(), sportsMatch.season(),
+                    sportsMatch.matchday()
             );
             matchRepository.save(match);
             recalculateIfFinished(match);
@@ -127,7 +132,10 @@ public class MatchSyncServiceImpl implements MatchSyncService {
                             sportsMatch.homeTeam(),
                             sportsMatch.awayTeam(),
                             sportsMatch.kickoffAt(),
-                            sportsMatch.status()
+                            sportsMatch.status(),
+                            sportsMatch.competitionCode(),
+                            sportsMatch.season(),
+                            sportsMatch.matchday()
                     ));
 
             match.updateFrom(
@@ -136,7 +144,10 @@ public class MatchSyncServiceImpl implements MatchSyncService {
                     sportsMatch.kickoffAt(),
                     sportsMatch.homeScore(),
                     sportsMatch.awayScore(),
-                    sportsMatch.status()
+                    sportsMatch.status(),
+                    sportsMatch.competitionCode(),
+                    sportsMatch.season(),
+                    sportsMatch.matchday()
             );
 
             matchRepository.save(match);

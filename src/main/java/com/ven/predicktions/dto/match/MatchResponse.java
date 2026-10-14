@@ -13,6 +13,9 @@ public record MatchResponse(
         Instant kickoffAt,
         Integer homeScore,
         Integer awayScore,
-        MatchStatus status
+        MatchStatus status,
+        String competitionCode,
+        Integer season,
+        Integer matchday
 ) {
 }

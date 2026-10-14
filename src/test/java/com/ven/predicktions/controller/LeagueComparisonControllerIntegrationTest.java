@@ -37,15 +37,26 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Integration coverage for the league prediction comparison.
+ *
+ * <p>Gameweeks are the provider matchday scoped to a competition and season —
+ * not the ISO week of the kickoff date. Matchday 1 of the configured
+ * competition kicks off in ISO week 37, which is exactly the regression this
+ * suite guards against.
+ */
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class LeagueComparisonControllerIntegrationTest {
 
-    private static final Instant COMPLETED_KICKOFF = Instant.parse("2026-03-02T18:00:00Z");
-    private static final Instant INCOMPLETE_KICKOFF = Instant.parse("2026-03-09T18:00:00Z");
-    private static final Instant NO_RESULT_KICKOFF = Instant.parse("2026-03-16T18:00:00Z");
-    private static final Instant UNSCORED_KICKOFF = Instant.parse("2026-03-23T18:00:00Z");
-    private static final Instant UNLOCK_KICKOFF = Instant.parse("2026-03-30T18:00:00Z");
+    private static final String COMPETITION = "CL";
+    private static final int SEASON = 2026;
+
+    // 2026-09-08 is ISO week 37, the unrelated label the old code showed.
+    private static final Instant MATCHDAY_ONE_KICKOFF = Instant.parse("2026-09-08T18:00:00Z");
+    private static final Instant MATCHDAY_TWO_KICKOFF = Instant.parse("2026-10-13T18:00:00Z");
+    private static final Instant MATCHDAY_THREE_KICKOFF = Instant.parse("2026-10-20T18:00:00Z");
+    private static final Instant MATCHDAY_FOUR_KICKOFF = Instant.parse("2026-11-03T18:00:00Z");
 
     @Container
     @ServiceConnection
@@ -105,30 +116,38 @@ class LeagueComparisonControllerIntegrationTest {
     }
 
     @Test
-    void completedGameweekRevealsAllMemberPredictions() throws Exception {
-        Match match = createMatch("gw-complete", COMPLETED_KICKOFF, MatchStatus.FINISHED, 2, 1);
-        createPrediction(viewer, match, 2, 1, 3);
-        createPrediction(alice, match, 3, 0, 1);
-        createPrediction(bob, match, 0, 2, 0);
+    void gameweekOneIsReportedInsteadOfTheKickoffIsoWeek() throws Exception {
+        Match match = createMatch("gw-one", 1, MATCHDAY_ONE_KICKOFF, MatchStatus.FINISHED, 2, 1);
+        createScoredPrediction(viewer, match, 2, 1);
+        createScoredPrediction(alice, match, 3, 0);
+        createScoredPrediction(bob, match, 0, 2);
 
         String token = loginAndGetToken(viewer.getUsername());
 
         ResponseEntity<String> listResponse = get(token, gameweeksPath());
-
         assertThat(listResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+
         JsonNode gameweeks = objectMapper.readTree(listResponse.getBody());
         assertThat(gameweeks).hasSize(1);
-        assertThat(gameweeks.get(0).get("season").asInt()).isEqualTo(season(COMPLETED_KICKOFF));
-        assertThat(gameweeks.get(0).get("gameweek").asInt()).isEqualTo(isoWeek(COMPLETED_KICKOFF));
+        assertThat(gameweeks.get(0).get("competition").asText()).isEqualTo(COMPETITION);
+        assertThat(gameweeks.get(0).get("season").asInt()).isEqualTo(SEASON);
+        assertThat(gameweeks.get(0).get("gameweek").asInt()).isEqualTo(1);
+        assertThat(gameweeks.get(0).get("label").asText()).isEqualTo("Gameweek 1");
         assertThat(gameweeks.get(0).get("matchCount").asInt()).isEqualTo(1);
-        assertThat(gameweeks.get(0).get("label").asText()).isNotBlank();
+        assertThat(gameweeks.get(0).get("eligibleMatchCount").asInt()).isEqualTo(1);
 
-        ResponseEntity<String> detailResponse = get(
-                token, gameweekPath(COMPLETED_KICKOFF));
+        // Sanity-check the regression: ISO week of that kickoff really is 37.
+        assertThat(MATCHDAY_ONE_KICKOFF.atZone(ZoneOffset.UTC)
+                .get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)).isEqualTo(37);
+
+        ResponseEntity<String> detailResponse = get(token, gameweekPath(1));
         assertThat(detailResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         JsonNode body = objectMapper.readTree(detailResponse.getBody());
         assertThat(body.get("leagueId").asText()).isEqualTo(league.getId().toString());
+        assertThat(body.get("competition").asText()).isEqualTo(COMPETITION);
+        assertThat(body.get("season").asInt()).isEqualTo(SEASON);
+        assertThat(body.get("gameweek").asInt()).isEqualTo(1);
         assertThat(body.get("members")).hasSize(3);
         assertThat(body.get("matches")).hasSize(1);
 
@@ -136,7 +155,6 @@ class LeagueComparisonControllerIntegrationTest {
         assertThat(matchNode.get("homeScore").asInt()).isEqualTo(2);
         assertThat(matchNode.get("awayScore").asInt()).isEqualTo(1);
         assertThat(matchNode.get("status").asText()).isEqualTo("FINISHED");
-        assertThat(matchNode.get("predictions")).hasSize(3);
 
         JsonNode viewerPrediction = predictionFor(matchNode, viewer.getUsername());
         assertThat(viewerPrediction.get("predictedHomeScore").asInt()).isEqualTo(2);
@@ -144,109 +162,159 @@ class LeagueComparisonControllerIntegrationTest {
         assertThat(viewerPrediction.get("points").asInt()).isEqualTo(3);
         assertThat(viewerPrediction.get("outcome").asText()).isEqualTo("EXACT_SCORE");
 
-        JsonNode alicePrediction = predictionFor(matchNode, alice.getUsername());
-        assertThat(alicePrediction.get("points").asInt()).isEqualTo(1);
-        assertThat(alicePrediction.get("outcome").asText()).isEqualTo("CORRECT_OUTCOME");
-
-        JsonNode bobPrediction = predictionFor(matchNode, bob.getUsername());
-        assertThat(bobPrediction.get("points").asInt()).isZero();
-        assertThat(bobPrediction.get("outcome").asText()).isEqualTo("INCORRECT");
+        assertThat(predictionFor(matchNode, alice.getUsername()).get("points").asInt()).isEqualTo(1);
+        assertThat(predictionFor(matchNode, bob.getUsername()).get("points").asInt()).isZero();
     }
 
     @Test
-    void incompleteGameweekIsHiddenAndReturnsConflict() throws Exception {
-        Match match = createMatch("gw-incomplete", INCOMPLETE_KICKOFF, MatchStatus.SCHEDULED, null, null);
-        createPrediction(alice, match, 1, 0, 0);
+    void multipleGameweeksAreListedNewestFirstAndEachIsSelectable() throws Exception {
+        Match first = createMatch("multi-1", 1, MATCHDAY_ONE_KICKOFF, MatchStatus.FINISHED, 1, 0);
+        createScoredPrediction(alice, first, 1, 0);
+        Match second = createMatch("multi-2", 2, MATCHDAY_TWO_KICKOFF, MatchStatus.FINISHED, 2, 2);
+        createScoredPrediction(alice, second, 2, 2);
 
         String token = loginAndGetToken(viewer.getUsername());
 
-        ResponseEntity<String> listResponse = get(token, gameweeksPath());
-        assertThat(listResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(objectMapper.readTree(listResponse.getBody())).isEmpty();
+        JsonNode gameweeks = objectMapper.readTree(get(token, gameweeksPath()).getBody());
+        assertThat(gameweeks).hasSize(2);
+        assertThat(gameweeks.get(0).get("gameweek").asInt()).isEqualTo(2);
+        assertThat(gameweeks.get(1).get("gameweek").asInt()).isEqualTo(1);
 
-        ResponseEntity<String> detailResponse = get(
-                token, gameweekPath(INCOMPLETE_KICKOFF));
-
-        assertThat(detailResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        JsonNode body = objectMapper.readTree(detailResponse.getBody());
-        assertThat(body.get("error").asText()).isEqualTo("GAMEWEEK_NOT_COMPLETED");
+        assertThat(get(token, gameweekPath(1)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(get(token, gameweekPath(2)).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
-    void finishedGameweekWithoutResultsIsHidden() throws Exception {
-        Match match = createMatch("gw-no-result", NO_RESULT_KICKOFF, MatchStatus.FINISHED, null, null);
-        createPrediction(alice, match, 1, 0, 0);
+    void fullyCompletedGameweekShowsEveryMatch() throws Exception {
+        Match first = createMatch("full-1", 2, MATCHDAY_TWO_KICKOFF, MatchStatus.FINISHED, 1, 1);
+        createScoredPrediction(alice, first, 1, 1);
+        Match second = createMatch("full-2", 2, MATCHDAY_TWO_KICKOFF.plusSeconds(3600),
+                MatchStatus.FINISHED, 3, 0);
+        createScoredPrediction(alice, second, 2, 0);
 
         String token = loginAndGetToken(viewer.getUsername());
 
-        ResponseEntity<String> listResponse = get(token, gameweeksPath());
-        assertThat(objectMapper.readTree(listResponse.getBody())).isEmpty();
-
-        ResponseEntity<String> detailResponse = get(
-                token, gameweekPath(NO_RESULT_KICKOFF));
-        assertThat(detailResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        JsonNode body = objectMapper.readTree(get(token, gameweekPath(2)).getBody());
+        assertThat(body.get("matches")).hasSize(2);
     }
 
     @Test
-    void gameweekWithUnscoredPredictionsIsHidden() throws Exception {
-        Match match = createMatch("gw-unscored", UNSCORED_KICKOFF, MatchStatus.FINISHED, 2, 1);
+    void partiallyCompletedGameweekOnlyShowsScoredMatches() throws Exception {
+        Match finished = createMatch("partial-finished", 3, MATCHDAY_THREE_KICKOFF,
+                MatchStatus.FINISHED, 2, 1);
+        createScoredPrediction(alice, finished, 2, 1);
+        createMatch("partial-upcoming", 3, MATCHDAY_THREE_KICKOFF.plusSeconds(3600),
+                MatchStatus.SCHEDULED, null, null);
+
+        String token = loginAndGetToken(viewer.getUsername());
+
+        JsonNode summary = objectMapper.readTree(get(token, gameweeksPath()).getBody()).get(0);
+        assertThat(summary.get("gameweek").asInt()).isEqualTo(3);
+        assertThat(summary.get("matchCount").asInt()).isEqualTo(2);
+        assertThat(summary.get("eligibleMatchCount").asInt()).isEqualTo(1);
+
+        JsonNode body = objectMapper.readTree(get(token, gameweekPath(3)).getBody());
+        assertThat(body.get("matches")).hasSize(1);
+        assertThat(body.get("matches").get(0).get("homeScore").asInt()).isEqualTo(2);
+        assertThat(body.get("matches").get(0).get("awayScore").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void finishedMatchWhoseScoringHasNotCompletedStaysHiddenThenAppears() throws Exception {
+        Match match = createMatch("unscored", 4, MATCHDAY_FOUR_KICKOFF,
+                MatchStatus.FINISHED, 2, 1);
         createPrediction(alice, match, 2, 1, 0);
 
         String token = loginAndGetToken(viewer.getUsername());
 
-        ResponseEntity<String> listResponse = get(token, gameweeksPath());
-        assertThat(objectMapper.readTree(listResponse.getBody())).isEmpty();
+        JsonNode summary = objectMapper.readTree(get(token, gameweeksPath()).getBody()).get(0);
+        assertThat(summary.get("matchCount").asInt()).isEqualTo(1);
+        assertThat(summary.get("eligibleMatchCount").asInt()).isZero();
 
-        ResponseEntity<String> detailResponse = get(
-                token, gameweekPath(UNSCORED_KICKOFF));
-        assertThat(detailResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        JsonNode hidden = objectMapper.readTree(get(token, gameweekPath(4)).getBody());
+        assertThat(hidden.get("matches")).isEmpty();
+
+        predictionRecalculationService.recalculate(match, null);
+
+        JsonNode revealed = objectMapper.readTree(get(token, gameweekPath(4)).getBody());
+        assertThat(revealed.get("matches")).hasSize(1);
+        assertThat(predictionFor(revealed.get("matches").get(0), alice.getUsername())
+                .get("points").asInt()).isEqualTo(3);
     }
 
     @Test
-    void onlyCompletedGameweeksAreListed() throws Exception {
-        Match completed = createMatch(
-                "gw-list-complete", COMPLETED_KICKOFF, MatchStatus.FINISHED, 1, 0);
-        createPrediction(alice, completed, 1, 0, 3);
+    void unfinishedMatchesAreNeverShown() throws Exception {
+        Match scheduled = createMatch("scheduled", 5, MATCHDAY_FOUR_KICKOFF,
+                MatchStatus.SCHEDULED, null, null);
+        createPrediction(alice, scheduled, 1, 0, 0);
 
-        createMatch("gw-list-incomplete", INCOMPLETE_KICKOFF, MatchStatus.SCHEDULED, null, null);
+        Match live = createMatch("live", 5, MATCHDAY_FOUR_KICKOFF.plusSeconds(3600),
+                MatchStatus.LIVE, 1, 0);
 
         String token = loginAndGetToken(viewer.getUsername());
 
-        ResponseEntity<String> response = get(token, gameweeksPath());
-
-        JsonNode gameweeks = objectMapper.readTree(response.getBody());
-        assertThat(gameweeks).hasSize(1);
-        assertThat(gameweeks.get(0).get("gameweek").asInt())
-                .isEqualTo(isoWeek(COMPLETED_KICKOFF));
+        JsonNode body = objectMapper.readTree(get(token, gameweekPath(5)).getBody());
+        assertThat(body.get("matches")).isEmpty();
     }
 
     @Test
-    void nonMemberCannotAccessLeagueComparisons() throws Exception {
-        Match match = createMatch("gw-non-member", COMPLETED_KICKOFF, MatchStatus.FINISHED, 1, 0);
-        createPrediction(alice, match, 1, 0, 3);
+    void matchBecomesVisibleAfterResultSynchronizationAndScoring() throws Exception {
+        Match match = createMatch("unlock", 6, MATCHDAY_FOUR_KICKOFF,
+                MatchStatus.SCHEDULED, null, null);
+        createPrediction(alice, match, 2, 0, 0);
 
-        String token = loginAndGetToken(outsider.getUsername());
+        String token = loginAndGetToken(viewer.getUsername());
 
-        ResponseEntity<String> listResponse = get(token, gameweeksPath());
-        assertThat(listResponse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(objectMapper.readTree(get(token, gameweekPath(6)).getBody())
+                .get("matches")).isEmpty();
 
-        ResponseEntity<String> detailResponse = get(
-                token, gameweekPath(COMPLETED_KICKOFF));
-        assertThat(detailResponse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        match.setStatus(MatchStatus.FINISHED);
+        match.setHomeScore(2);
+        match.setAwayScore(0);
+        matchRepository.save(match);
+        predictionRecalculationService.recalculate(match, null);
+
+        JsonNode body = objectMapper.readTree(get(token, gameweekPath(6)).getBody());
+        assertThat(body.get("matches")).hasSize(1);
+        JsonNode prediction = predictionFor(body.get("matches").get(0), alice.getUsername());
+        assertThat(prediction.get("points").asInt()).isEqualTo(3);
+        assertThat(prediction.get("outcome").asText()).isEqualTo("EXACT_SCORE");
+    }
+
+    @Test
+    void memberWithoutPredictionIsRevealedAsNoPrediction() throws Exception {
+        Match match = createMatch("missing-member", 7, MATCHDAY_FOUR_KICKOFF,
+                MatchStatus.FINISHED, 2, 1);
+        createScoredPrediction(viewer, match, 2, 1);
+
+        String token = loginAndGetToken(viewer.getUsername());
+
+        ResponseEntity<String> response = get(token, gameweekPath(7));
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        JsonNode body = objectMapper.readTree(response.getBody());
+        assertThat(body.get("members")).hasSize(3);
+
+        JsonNode alicePrediction = predictionFor(body.get("matches").get(0), alice.getUsername());
+        assertThat(alicePrediction.get("outcome").asText()).isEqualTo("NO_PREDICTION");
+        assertThat(alicePrediction.get("predictedHomeScore").isNull()).isTrue();
+        assertThat(alicePrediction.get("predictedAwayScore").isNull()).isTrue();
+        assertThat(alicePrediction.get("points").isNull()).isTrue();
     }
 
     @Test
     void memberIdFilterRevealsOnlyRequestedMember() throws Exception {
-        Match match = createMatch("gw-member-filter", COMPLETED_KICKOFF, MatchStatus.FINISHED, 2, 1);
-        createPrediction(viewer, match, 2, 1, 3);
-        createPrediction(alice, match, 3, 0, 1);
-        createPrediction(bob, match, 0, 2, 0);
+        Match match = createMatch("member-filter", 8, MATCHDAY_FOUR_KICKOFF,
+                MatchStatus.FINISHED, 2, 1);
+        createScoredPrediction(viewer, match, 2, 1);
+        createScoredPrediction(alice, match, 3, 0);
+        createScoredPrediction(bob, match, 0, 2);
 
         String token = loginAndGetToken(viewer.getUsername());
 
         ResponseEntity<String> response = get(
                 token,
-                gameweekPath(COMPLETED_KICKOFF) + "?memberId=" + alice.getId()
+                gameweekPath(8) + "?memberId=" + alice.getId()
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -261,14 +329,15 @@ class LeagueComparisonControllerIntegrationTest {
 
     @Test
     void memberIdThatIsNotInLeagueIsRejected() throws Exception {
-        Match match = createMatch("gw-bad-member", COMPLETED_KICKOFF, MatchStatus.FINISHED, 2, 1);
-        createPrediction(alice, match, 3, 0, 1);
+        Match match = createMatch("bad-member", 9, MATCHDAY_FOUR_KICKOFF,
+                MatchStatus.FINISHED, 2, 1);
+        createScoredPrediction(alice, match, 3, 0);
 
         String token = loginAndGetToken(viewer.getUsername());
 
         ResponseEntity<String> response = get(
                 token,
-                gameweekPath(COMPLETED_KICKOFF) + "?memberId=" + outsider.getId()
+                gameweekPath(9) + "?memberId=" + outsider.getId()
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -276,14 +345,14 @@ class LeagueComparisonControllerIntegrationTest {
 
     @Test
     void unrelatedUsersPredictionsAreNotExposed() throws Exception {
-        Match match = createMatch("gw-unrelated", COMPLETED_KICKOFF, MatchStatus.FINISHED, 2, 1);
-        createPrediction(alice, match, 3, 0, 1);
+        Match match = createMatch("unrelated", 10, MATCHDAY_FOUR_KICKOFF,
+                MatchStatus.FINISHED, 2, 1);
+        createScoredPrediction(alice, match, 3, 0);
         createPrediction(outsider, match, 9, 9, 0);
 
         String token = loginAndGetToken(viewer.getUsername());
 
-        ResponseEntity<String> response = get(
-                token, gameweekPath(COMPLETED_KICKOFF));
+        ResponseEntity<String> response = get(token, gameweekPath(10));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).doesNotContain(outsider.getUsername());
@@ -292,31 +361,15 @@ class LeagueComparisonControllerIntegrationTest {
     }
 
     @Test
-    void gameweekUnlocksAfterResultAndRecalculation() throws Exception {
-        Match match = createMatch(
-                "gw-unlock", UNLOCK_KICKOFF, MatchStatus.SCHEDULED, null, null);
-        createPrediction(alice, match, 2, 1, 0);
+    void nonMemberCannotAccessLeagueComparisons() throws Exception {
+        Match match = createMatch("non-member", 11, MATCHDAY_FOUR_KICKOFF,
+                MatchStatus.FINISHED, 1, 0);
+        createScoredPrediction(alice, match, 1, 0);
 
-        String token = loginAndGetToken(viewer.getUsername());
+        String token = loginAndGetToken(outsider.getUsername());
 
-        ResponseEntity<String> hiddenResponse = get(
-                token, gameweekPath(UNLOCK_KICKOFF));
-        assertThat(hiddenResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-
-        match.setStatus(MatchStatus.FINISHED);
-        match.setHomeScore(2);
-        match.setAwayScore(1);
-        matchRepository.save(match);
-        predictionRecalculationService.recalculate(match, null);
-
-        ResponseEntity<String> unlockedResponse = get(
-                token, gameweekPath(UNLOCK_KICKOFF));
-
-        assertThat(unlockedResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        JsonNode body = objectMapper.readTree(unlockedResponse.getBody());
-        JsonNode prediction = predictionFor(body.get("matches").get(0), alice.getUsername());
-        assertThat(prediction.get("points").asInt()).isEqualTo(3);
-        assertThat(prediction.get("outcome").asText()).isEqualTo("EXACT_SCORE");
+        assertThat(get(token, gameweeksPath()).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(get(token, gameweekPath(11)).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
@@ -339,65 +392,38 @@ class LeagueComparisonControllerIntegrationTest {
     }
 
     @Test
-    void multipleCompletedGameweeksAreListedNewestFirst() throws Exception {
-        Instant earlier = Instant.parse("2026-04-06T18:00:00Z");
-        Instant later = Instant.parse("2026-04-20T18:00:00Z");
-
-        Match earlierMatch = createMatch("gw-multi-earlier", earlier, MatchStatus.FINISHED, 1, 0);
-        createPrediction(alice, earlierMatch, 1, 0, 3);
-
-        Match laterMatch = createMatch("gw-multi-later", later, MatchStatus.FINISHED, 2, 2);
-        createPrediction(alice, laterMatch, 2, 2, 3);
+    void unknownGameweekReturnsNotFound() throws Exception {
+        Match match = createMatch("known", 1, MATCHDAY_ONE_KICKOFF, MatchStatus.FINISHED, 1, 0);
+        createScoredPrediction(alice, match, 1, 0);
 
         String token = loginAndGetToken(viewer.getUsername());
 
-        ResponseEntity<String> response = get(token, gameweeksPath());
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        JsonNode gameweeks = objectMapper.readTree(response.getBody());
-        assertThat(gameweeks).hasSize(2);
-        assertThat(gameweeks.get(0).get("gameweek").asInt()).isEqualTo(isoWeek(later));
-        assertThat(gameweeks.get(0).get("season").asInt()).isEqualTo(season(later));
-        assertThat(gameweeks.get(1).get("gameweek").asInt()).isEqualTo(isoWeek(earlier));
-
-        assertThat(get(token, gameweekPath(later)).getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(get(token, gameweekPath(earlier)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(get(token, gameweekPath(99)).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
-    void memberWithoutPredictionIsRevealedAsNoPrediction() throws Exception {
-        Match match = createMatch("gw-missing-member", COMPLETED_KICKOFF, MatchStatus.FINISHED, 2, 1);
-        createPrediction(viewer, match, 2, 1, 3);
+    void emptyGameweekWithoutEligibleMatchesIsReturnedEmpty() throws Exception {
+        createMatch("empty-gw", 12, MATCHDAY_FOUR_KICKOFF, MatchStatus.SCHEDULED, null, null);
 
         String token = loginAndGetToken(viewer.getUsername());
 
-        ResponseEntity<String> response = get(token, gameweekPath(COMPLETED_KICKOFF));
+        JsonNode summary = objectMapper.readTree(get(token, gameweeksPath()).getBody()).get(0);
+        assertThat(summary.get("gameweek").asInt()).isEqualTo(12);
+        assertThat(summary.get("eligibleMatchCount").asInt()).isZero();
 
+        ResponseEntity<String> response = get(token, gameweekPath(12));
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         JsonNode body = objectMapper.readTree(response.getBody());
-        assertThat(body.get("members")).hasSize(3);
-
-        JsonNode alicePrediction = predictionFor(body.get("matches").get(0), alice.getUsername());
-        assertThat(alicePrediction.get("outcome").asText()).isEqualTo("NO_PREDICTION");
-        assertThat(alicePrediction.get("predictedHomeScore").isNull()).isTrue();
-        assertThat(alicePrediction.get("predictedAwayScore").isNull()).isTrue();
-        assertThat(alicePrediction.get("points").isNull()).isTrue();
+        assertThat(body.get("matches")).isEmpty();
     }
 
     private String gameweeksPath() {
         return "/api/leagues/" + league.getId() + "/comparisons/gameweeks";
     }
 
-    private String gameweekPath(Instant kickoff) {
-        return gameweeksPath() + "/" + season(kickoff) + "/" + isoWeek(kickoff);
-    }
-
-    private int season(Instant instant) {
-        return instant.atZone(ZoneOffset.UTC).getYear();
-    }
-
-    private int isoWeek(Instant instant) {
-        return instant.atZone(ZoneOffset.UTC).get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
+    private String gameweekPath(int matchday) {
+        return gameweeksPath() + "/" + COMPETITION + "/" + SEASON + "/" + matchday;
     }
 
     private JsonNode predictionFor(JsonNode matchNode, String username) {
@@ -437,12 +463,22 @@ class LeagueComparisonControllerIntegrationTest {
 
     private Match createMatch(
             String externalId,
+            int matchday,
             Instant kickoffAt,
             MatchStatus status,
             Integer homeScore,
             Integer awayScore
     ) {
-        Match match = new Match(externalId, "Home FC", "Away FC", kickoffAt, status);
+        Match match = new Match(
+                externalId,
+                "Home FC",
+                "Away FC",
+                kickoffAt,
+                status,
+                COMPETITION,
+                SEASON,
+                matchday
+        );
         match.setHomeScore(homeScore);
         match.setAwayScore(awayScore);
 
@@ -465,6 +501,16 @@ class LeagueComparisonControllerIntegrationTest {
         prediction.setPoints(points);
 
         return predictionRepository.save(prediction);
+    }
+
+    private void createScoredPrediction(
+            User user,
+            Match match,
+            int predictedHomeScore,
+            int predictedAwayScore
+    ) {
+        createPrediction(user, match, predictedHomeScore, predictedAwayScore, 0);
+        predictionRecalculationService.recalculate(match, null);
     }
 
     private String randomJoinCode() {

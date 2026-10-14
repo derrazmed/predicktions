@@ -6,6 +6,8 @@ public record FootballDataMatch(
         Long id,
         Instant utcDate,
         String status,
+        Integer matchday,
+        FootballDataSeason season,
         FootballDataTeam homeTeam,
         FootballDataTeam awayTeam,
         FootballDataScore score

@@ -7,6 +7,7 @@ import java.util.UUID;
 public record GameweekComparisonResponse(
         UUID leagueId,
         String leagueName,
+        String competition,
         int season,
         int gameweek,
         String label,

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -38,48 +39,47 @@ class GameweekCompletionServiceTest {
     }
 
     @Test
-    void emptyGameweekIsNotComplete() {
-        assertThat(service.isComplete(List.of())).isFalse();
-        assertThat(service.isComplete(null)).isFalse();
+    void nullMatchAndEmptyCollectionAreNotReady() {
+        assertThat(service.isMatchReady(null)).isFalse();
+        assertThat(service.readyMatchIds(List.of())).isEmpty();
+        assertThat(service.readyMatchIds(null)).isEmpty();
         verifyNoInteractions(predictionRepository);
     }
 
     @Test
-    void scheduledMatchMakesGameweekIncomplete() {
+    void scheduledMatchIsNotReady() {
         Match match = match(MatchStatus.SCHEDULED, null, null);
 
-        assertThat(service.isComplete(List.of(match))).isFalse();
+        assertThat(service.isMatchReady(match)).isFalse();
         verifyNoInteractions(predictionRepository);
     }
 
     @Test
-    void liveMatchMakesGameweekIncomplete() {
+    void liveMatchIsNotReady() {
         Match match = match(MatchStatus.LIVE, 1, 0);
 
-        assertThat(service.isComplete(List.of(match))).isFalse();
+        assertThat(service.isMatchReady(match)).isFalse();
         verifyNoInteractions(predictionRepository);
     }
 
     @Test
-    void finishedMatchWithoutResultMakesGameweekIncomplete() {
+    void finishedMatchWithoutResultIsNotReady() {
         Match match = match(MatchStatus.FINISHED, null, null);
 
-        assertThat(service.isComplete(List.of(match))).isFalse();
+        assertThat(service.isMatchReady(match)).isFalse();
         verifyNoInteractions(predictionRepository);
     }
 
     @Test
-    void cancelledMatchIsConsideredTerminal() {
+    void cancelledMatchIsNotReadyBecauseItHasNoFinalResult() {
         Match match = match(MatchStatus.CANCELLED, null, null);
 
-        when(predictionRepository.findAllByMatchIdIn(anyList()))
-                .thenReturn(List.of());
-
-        assertThat(service.isComplete(List.of(match))).isTrue();
+        assertThat(service.isMatchReady(match)).isFalse();
+        verifyNoInteractions(predictionRepository);
     }
 
     @Test
-    void gameweekIsCompleteWhenAllPredictionsAreScoredConsistently() {
+    void finishedMatchIsReadyWhenAllPredictionsAreScoredConsistently() {
         Match match = match(MatchStatus.FINISHED, 2, 1);
         Prediction exact = prediction(match, 2, 1);
         exact.setPoints(3);
@@ -89,11 +89,11 @@ class GameweekCompletionServiceTest {
         when(predictionRepository.findAllByMatchIdIn(anyList()))
                 .thenReturn(List.of(exact, outcome));
 
-        assertThat(service.isComplete(List.of(match))).isTrue();
+        assertThat(service.isMatchReady(match)).isTrue();
     }
 
     @Test
-    void gameweekIsIncompleteWhenScoringDoesNotMatchResult() {
+    void finishedMatchIsNotReadyWhenScoringDoesNotMatchResult() {
         Match match = match(MatchStatus.FINISHED, 2, 1);
         Prediction stale = prediction(match, 2, 1);
         stale.setPoints(0);
@@ -101,19 +101,35 @@ class GameweekCompletionServiceTest {
         when(predictionRepository.findAllByMatchIdIn(anyList()))
                 .thenReturn(List.of(stale));
 
-        assertThat(service.isComplete(List.of(match))).isFalse();
+        assertThat(service.isMatchReady(match)).isFalse();
     }
 
     @Test
-    void cancelledMatchesDoNotRequireScoring() {
-        Match cancelled = match(MatchStatus.CANCELLED, null, null);
-        Prediction prediction = prediction(cancelled, 2, 1);
-        prediction.setPoints(0);
+    void finishedMatchWithoutPredictionsIsReady() {
+        Match match = match(MatchStatus.FINISHED, 1, 0);
 
         when(predictionRepository.findAllByMatchIdIn(anyList()))
-                .thenReturn(List.of(prediction));
+                .thenReturn(List.of());
 
-        assertThat(service.isComplete(List.of(cancelled))).isTrue();
+        assertThat(service.isMatchReady(match)).isTrue();
+    }
+
+    @Test
+    void readyMatchIdsReturnsOnlyFinishedAndScoredMatches() {
+        Match ready = persistedMatch(MatchStatus.FINISHED, 2, 1);
+        Match stale = persistedMatch(MatchStatus.FINISHED, 2, 1);
+        Match scheduled = persistedMatch(MatchStatus.SCHEDULED, null, null);
+
+        Prediction readyPrediction = prediction(ready, 2, 1);
+        readyPrediction.setPoints(3);
+        Prediction stalePrediction = prediction(stale, 2, 1);
+        stalePrediction.setPoints(0);
+
+        when(predictionRepository.findAllByMatchIdIn(anyList()))
+                .thenReturn(List.of(readyPrediction, stalePrediction));
+
+        assertThat(service.readyMatchIds(List.of(ready, stale, scheduled)))
+                .containsExactly(ready.getId());
     }
 
     private Match match(MatchStatus status, Integer homeScore, Integer awayScore) {
@@ -126,6 +142,13 @@ class GameweekCompletionServiceTest {
         );
         match.setHomeScore(homeScore);
         match.setAwayScore(awayScore);
+
+        return match;
+    }
+
+    private Match persistedMatch(MatchStatus status, Integer homeScore, Integer awayScore) {
+        Match match = match(status, homeScore, awayScore);
+        ReflectionTestUtils.setField(match, "id", UUID.randomUUID());
 
         return match;
     }

@@ -7,7 +7,6 @@ import com.ven.predicktions.dto.comparison.GameweekSummaryResponse;
 import com.ven.predicktions.dto.comparison.MemberPredictionResponse;
 import com.ven.predicktions.dto.comparison.PredictionOutcome;
 import com.ven.predicktions.exception.ForbiddenOperationException;
-import com.ven.predicktions.exception.GameweekNotCompletedException;
 import com.ven.predicktions.exception.ResourceNotFoundException;
 import com.ven.predicktions.model.League;
 import com.ven.predicktions.model.LeagueMember;
@@ -24,15 +23,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.temporal.IsoFields;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Reveals league members' predictions per individual match.
+ *
+ * <p>A "gameweek" is the sports provider's matchday scoped to its competition
+ * and season — never the ISO week of the kickoff date. A match appears as soon
+ * as its final result is persisted and its predictions have been scored; the
+ * rest of the gameweek may still be in progress.
+ */
 @Service
 @Transactional(readOnly = true)
 public class LeagueComparisonServiceImpl implements LeagueComparisonService {
@@ -58,16 +64,17 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
     }
 
     @Override
-    public List<GameweekSummaryResponse> getCompletedGameweeks(UUID userId, UUID leagueId) {
+    public List<GameweekSummaryResponse> getGameweeks(UUID userId, UUID leagueId) {
         findLeague(leagueId);
         requireMember(leagueId, userId);
 
-        Map<GameweekKey, List<Match>> gameweeks = groupByGameweek(matchRepository.findAll());
+        List<Match> allMatches = matchRepository.findAll();
+        Map<GameweekKey, List<Match>> gameweeks = groupByGameweek(allMatches);
+        Set<UUID> readyMatchIds = completionService.readyMatchIds(allMatches);
 
         return gameweeks.entrySet().stream()
-                .filter(entry -> completionService.isComplete(entry.getValue()))
                 .sorted(Map.Entry.<GameweekKey, List<Match>>comparingByKey().reversed())
-                .map(entry -> summarize(entry.getKey(), entry.getValue()))
+                .map(entry -> summarize(entry.getKey(), entry.getValue(), readyMatchIds))
                 .toList();
     }
 
@@ -75,6 +82,7 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
     public GameweekComparisonResponse getGameweekComparison(
             UUID userId,
             UUID leagueId,
+            String competition,
             int season,
             int gameweek,
             UUID memberId
@@ -82,17 +90,19 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
         League league = findLeague(leagueId);
         requireMember(leagueId, userId);
 
+        GameweekKey key = new GameweekKey(competition, season, gameweek);
+
         List<Match> matches = groupByGameweek(matchRepository.findAll())
-                .getOrDefault(new GameweekKey(season, gameweek), List.of());
+                .getOrDefault(key, List.of());
 
         if (matches.isEmpty()) {
             throw new ResourceNotFoundException("Gameweek not found");
         }
 
-        if (!completionService.isComplete(matches)) {
-            throw new GameweekNotCompletedException(
-                    "Predictions for this gameweek are not available yet");
-        }
+        Set<UUID> readyMatchIds = completionService.readyMatchIds(matches);
+        List<Match> eligibleMatches = matches.stream()
+                .filter(match -> readyMatchIds.contains(match.getId()))
+                .toList();
 
         List<LeagueMember> members = leagueMemberRepository.findAllByLeagueIdOrdered(leagueId);
 
@@ -111,7 +121,7 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
                 .toList();
 
         Map<UUID, Map<UUID, Prediction>> predictionsByMatchAndUser = loadPredictions(
-                matches, selectedMemberIds);
+                eligibleMatches, selectedMemberIds);
 
         List<ComparisonMemberResponse> memberResponses = selectedMembers.stream()
                 .map(member -> new ComparisonMemberResponse(
@@ -119,17 +129,18 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
                         member.getUser().getUsername()))
                 .toList();
 
-        List<ComparisonMatchResponse> matchResponses = matches.stream()
+        List<ComparisonMatchResponse> matchResponses = eligibleMatches.stream()
                 .map(match -> toMatchResponse(match, selectedMembers, predictionsByMatchAndUser))
                 .toList();
 
-        GameweekSummaryResponse summary = summarize(new GameweekKey(season, gameweek), matches);
+        GameweekSummaryResponse summary = summarize(key, matches, readyMatchIds);
 
         return new GameweekComparisonResponse(
                 league.getId(),
                 league.getName(),
-                season,
-                gameweek,
+                key.competition(),
+                key.season(),
+                key.gameweek(),
                 summary.label(),
                 summary.firstKickoffAt(),
                 summary.lastKickoffAt(),
@@ -142,11 +153,11 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
         Map<GameweekKey, List<Match>> gameweeks = new HashMap<>();
 
         for (Match match : matches) {
-            var kickoff = match.getKickoffAt().atZone(ZoneOffset.UTC);
-            GameweekKey key = new GameweekKey(
-                    kickoff.getYear(),
-                    kickoff.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
-            );
+            GameweekKey key = GameweekKey.of(match);
+
+            if (key == null) {
+                continue;
+            }
 
             gameweeks.computeIfAbsent(key, ignored -> new ArrayList<>()).add(match);
         }
@@ -163,7 +174,7 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
     ) {
         Map<UUID, Map<UUID, Prediction>> predictionsByMatchAndUser = new HashMap<>();
 
-        if (memberIds.isEmpty()) {
+        if (matches.isEmpty() || memberIds.isEmpty()) {
             return predictionsByMatchAndUser;
         }
 
@@ -250,7 +261,11 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
         return PredictionOutcome.INCORRECT;
     }
 
-    private GameweekSummaryResponse summarize(GameweekKey key, List<Match> matches) {
+    private GameweekSummaryResponse summarize(
+            GameweekKey key,
+            List<Match> matches,
+            Set<UUID> readyMatchIds
+    ) {
         Instant firstKickoff = matches.stream()
                 .map(Match::getKickoffAt)
                 .min(Comparator.naturalOrder())
@@ -261,11 +276,17 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
                 .max(Comparator.naturalOrder())
                 .orElse(null);
 
+        int eligibleMatchCount = (int) matches.stream()
+                .filter(match -> readyMatchIds.contains(match.getId()))
+                .count();
+
         return new GameweekSummaryResponse(
+                key.competition(),
                 key.season(),
                 key.gameweek(),
                 "Gameweek " + key.gameweek(),
                 matches.size(),
+                eligibleMatchCount,
                 firstKickoff,
                 lastKickoff
         );
@@ -282,7 +303,31 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
         }
     }
 
-    private record GameweekKey(int season, int gameweek) implements Comparable<GameweekKey> {
+    /**
+     * Identity of a gameweek: the provider competition plus the season and
+     * matchday it belongs to. A match without this identity cannot be placed in
+     * a gameweek and is therefore excluded rather than guessed from its date.
+     */
+    private record GameweekKey(
+            String competition,
+            int season,
+            int gameweek
+    ) implements Comparable<GameweekKey> {
+
+        static GameweekKey of(Match match) {
+            if (match == null
+                    || match.getCompetitionCode() == null
+                    || match.getSeason() == null
+                    || match.getMatchday() == null) {
+                return null;
+            }
+
+            return new GameweekKey(
+                    match.getCompetitionCode(),
+                    match.getSeason(),
+                    match.getMatchday()
+            );
+        }
 
         @Override
         public int compareTo(GameweekKey other) {
@@ -292,7 +337,13 @@ public class LeagueComparisonServiceImpl implements LeagueComparisonService {
                 return seasonComparison;
             }
 
-            return Integer.compare(gameweek, other.gameweek);
+            int gameweekComparison = Integer.compare(gameweek, other.gameweek);
+
+            if (gameweekComparison != 0) {
+                return gameweekComparison;
+            }
+
+            return competition.compareTo(other.competition);
         }
     }
 }

@@ -2,47 +2,78 @@
 
 ## Overview
 
-The League Prediction Comparison API lets an authenticated league member reveal and compare the score predictions of the other members of the same league — but only for a **completed gameweek**.
+The League Prediction Comparison API lets an authenticated league member reveal
+and compare the score predictions of the other members of the same league.
 
-A gameweek is revealed only after its matches and predictions are fully final. Before that point, other members' predictions stay hidden and the API does not leak whether or when they will become visible.
+Predictions are revealed **match by match**. A match becomes visible as soon as
+its final result has been persisted and the predictions for that match have been
+scored consistently with the scoring rules. A gameweek does not need to be
+finished: already eligible matches are visible while the rest of the round is
+still scheduled, live, or awaiting scoring.
+
+Before a match is eligible, other members' predictions for it stay hidden and the
+API does not leak whether or when they will become visible.
 
 The feature is organized around two read-only endpoints under an existing league.
 
 ## Gameweek Definition
 
-There is no separate gameweek entity. A gameweek is derived from match kickoff times:
+A gameweek is the sports provider's **matchday**, scoped to the competition and
+season it belongs to. It is *not* derived from the kickoff date.
 
-- `gameweek` — the ISO-8601 week number of `kickoff_at` in UTC.
-- `season` — the calendar year of `kickoff_at` in UTC.
+Matches persist the provider identity in three columns:
 
-This is the same grouping used by the leaderboard. Because matches are global fixtures, a gameweek is shared by every league; league membership only controls who may view the predictions.
+- `competition_code` — the competition the match belongs to (for example `CL`).
+- `season` — the provider's season identifier (the season's start year).
+- `matchday` — the provider's round/matchday within that competition and season.
 
-## Visibility Rules
+The comparison groups matches by `(competition_code, season, matchday)`:
 
-A gameweek is **completed** when all of the following hold:
+- `competition` — the competition code.
+- `season` — the provider season.
+- `gameweek` — the matchday.
 
-1. The gameweek contains at least one match.
-2. Every match is terminal:
-   - `FINISHED` with both `homeScore` and `awayScore` present, or
-   - `CANCELLED`.
-3. Every stored prediction on the non-cancelled matches has been scored consistently with the scoring rules (see below).
+This matters because a matchday is only meaningful inside its competition and
+season: matchday 1 of the configured Champions League season kicks off in
+September, whose ISO week is 37. Deriving the gameweek from the kickoff date
+produced the unrelated label "Gameweek 37" instead of "Gameweek 1".
 
-If any match is `SCHEDULED` or `LIVE`, or a `FINISHED` match has no result, the gameweek is not complete. This also covers postponed matches, which remain `SCHEDULED`.
+A match with no provider identity (for example rows synchronised before the
+identity columns existed) cannot be placed in a gameweek and is therefore never
+shown until it is re-synchronised. Matchdays are never guessed or fabricated.
+
+## Match Eligibility
+
+A match is **eligible** when both of the following hold:
+
+1. Its final result has been persisted: `status` is `FINISHED`, and both
+   `homeScore` and `awayScore` are present. A cancelled match has no final result
+   and is never eligible.
+2. Every stored prediction for the match has been scored consistently with the
+   scoring rules (see below). A match with no predictions satisfies this
+   condition vacuously.
+
+Only eligible matches are returned, and only eligible matches contribute to a
+gameweek's `eligibleMatchCount`. This is enforced in the backend query/service
+layer; the frontend never filters incomplete data into a visible state.
 
 ### Scoring Consistency
 
-Predictions are stored with a `points` value. A gameweek is only revealed once those stored values match the current scoring rules:
+Predictions are stored with a `points` value. A match is only revealed once
+those stored values match the current scoring rules:
 
 | Outcome | Points |
 |---|---:|
 | Exact score | 3 |
 | Correct outcome (win/draw/loss) | 1 |
 | Incorrect outcome | 0 |
-| Cancelled match | 0 (no result) |
 
-Result synchronization automatically recalculates predictions for finished matches, so a gameweek unlocks as soon as the final results are persisted and scoring completes. A manual recalculation also satisfies the rule.
+Result synchronization automatically recalculates predictions for finished
+matches, so a match unlocks as soon as its final result is persisted and scoring
+completes. A manual recalculation also satisfies the rule.
 
-If scoring is incomplete, the gameweek stays hidden rather than exposing partially scored predictions.
+If scoring is incomplete, the match stays hidden rather than exposing partially
+scored predictions.
 
 ## Authentication
 
@@ -52,7 +83,8 @@ All endpoints require a valid JWT access token.
 Authorization: Bearer <access-token>
 ```
 
-The authenticated user is taken from the security context. The client never sends the viewer's own `userId`.
+The authenticated user is taken from the security context. The client never sends
+the viewer's own `userId`.
 
 ## Authorization
 
@@ -60,7 +92,7 @@ The authenticated user is taken from the security context. The client never send
 - The league must exist. Unknown leagues receive `404 Not Found`.
 - The optional `memberId` filter must reference a member of the **same** league. A member id from another league receives `404 Not Found` (the API does not reveal whether that user exists elsewhere).
 
-## List Completed Gameweeks
+## List Gameweeks
 
 ### Endpoint
 
@@ -70,39 +102,43 @@ GET /api/leagues/{leagueId}/comparisons/gameweeks
 
 Authentication and league membership are required.
 
-Only completed gameweeks are returned, newest first. In-progress or not-yet-scored gameweeks are intentionally absent.
+Every gameweek that contains at least one match with a provider identity is
+returned, newest season and matchday first. Each summary reports how many of its
+matches are currently eligible, so a partially completed round is visible as
+soon as one of its matches is ready.
 
 ### Successful Response
-
-```http
-200 OK
-```
 
 ```json
 [
   {
+    "competition": "CL",
     "season": 2026,
-    "gameweek": 12,
-    "label": "Gameweek 12",
+    "gameweek": 1,
+    "label": "Gameweek 1",
     "matchCount": 18,
-    "firstKickoffAt": "2026-03-16T17:30:00Z",
-    "lastKickoffAt": "2026-03-18T20:00:00Z"
+    "eligibleMatchCount": 6,
+    "firstKickoffAt": "2026-09-08T16:45:00Z",
+    "lastKickoffAt": "2026-09-10T19:00:00Z"
   }
 ]
 ```
 
-If no gameweek is complete yet, the API returns:
+If no matches have a provider identity yet, the API returns:
 
 ```json
 []
 ```
+
+The frontend preselects the most recent gameweek whose `eligibleMatchCount` is
+greater than zero, falling back to the newest gameweek when none is ready.
 
 ## Retrieve a Gameweek Comparison
 
 ### Endpoint
 
 ```http
-GET /api/leagues/{leagueId}/comparisons/gameweeks/{season}/{gameweek}
+GET /api/leagues/{leagueId}/comparisons/gameweeks/{competition}/{season}/{gameweek}
 ```
 
 Optional query parameter:
@@ -111,23 +147,23 @@ Optional query parameter:
 |---|---|---:|---|
 | `memberId` | UUID | No | Limit the response to a single league member |
 
-Authentication and league membership are required, and the gameweek must be completed.
+Authentication and league membership are required. The requested
+`(competition, season, gameweek)` identifies the round. Only eligible matches
+are returned; if the gameweek exists but no match is eligible yet, the response
+is `200 OK` with an empty `matches` array.
 
 ### Successful Response
-
-```http
-200 OK
-```
 
 ```json
 {
   "leagueId": "9b1d5c3e-1234-4567-8901-123456789abc",
   "leagueName": "Office League",
+  "competition": "CL",
   "season": 2026,
-  "gameweek": 12,
-  "label": "Gameweek 12",
-  "firstKickoffAt": "2026-03-16T17:30:00Z",
-  "lastKickoffAt": "2026-03-18T20:00:00Z",
+  "gameweek": 1,
+  "label": "Gameweek 1",
+  "firstKickoffAt": "2026-09-08T16:45:00Z",
+  "lastKickoffAt": "2026-09-10T19:00:00Z",
   "members": [
     { "userId": "3f82c7c2-1234-4567-8901-123456789abc", "username": "alice" },
     { "userId": "7e1c2c7e-1234-4567-8901-123456789abc", "username": "bob" }
@@ -137,7 +173,7 @@ Authentication and league membership are required, and the gameweek must be comp
       "matchId": "c0a8012e-1234-4567-8901-123456789abc",
       "homeTeam": "Home FC",
       "awayTeam": "Away FC",
-      "kickoffAt": "2026-03-16T17:30:00Z",
+      "kickoffAt": "2026-09-08T16:45:00Z",
       "homeScore": 2,
       "awayScore": 1,
       "status": "FINISHED",
@@ -174,25 +210,33 @@ Authentication and league membership are required, and the gameweek must be comp
 | `NO_PREDICTION` | The member did not predict this match |
 | `NO_RESULT` | Match was cancelled; no result to score against |
 
-Members without a prediction are still listed for each match, with `predictedHomeScore`, `predictedAwayScore`, and `points` set to `null` and `outcome` set to `NO_PREDICTION`.
+Members without a prediction are still listed for each match, with
+`predictedHomeScore`, `predictedAwayScore`, and `points` set to `null` and
+`outcome` set to `NO_PREDICTION`. A missing prediction is therefore never
+confused with a zero-point prediction.
 
 ### Filtering by member
 
 ```http
-GET /api/leagues/{leagueId}/comparisons/gameweeks/2026/12?memberId=7e1c2c7e-1234-4567-8901-123456789abc
+GET /api/leagues/{leagueId}/comparisons/gameweeks/CL/2026/1?memberId=7e1c2c7e-1234-4567-8901-123456789abc
 ```
 
-When `memberId` is supplied, both `members` and each match's `predictions` contain only that member.
+When `memberId` is supplied, both `members` and each match's `predictions`
+contain only that member.
 
 ## Privacy
 
 The comparison responses expose only:
 
 - league-member usernames;
-- their predictions for the requested completed gameweek;
-- match results for that gameweek.
+- their predictions for eligible matches in the requested gameweek;
+- the final results of those matches.
 
-Predictions from users outside the league are never returned, and unrelated members are never surfaced through counts, pagination, or metadata. Email addresses, password hashes, and other private account data are never included.
+Predictions from users outside the league are never returned, and unrelated
+members are never surfaced through counts, pagination, or metadata. Email
+addresses, password hashes, and other private account data are never included.
+The current user is always taken from the security context, never from the
+request.
 
 ## Error Responses
 
@@ -229,32 +273,21 @@ Returned when the authenticated user is not a member of the league.
 ### 404 Not Found
 
 Returned when the league, the gameweek, or the requested member cannot be found.
+An existing gameweek with no eligible matches is **not** a 404: it returns
+`200 OK` with an empty `matches` array.
 
 ```json
 {
   "status": 404,
   "error": "NOT_FOUND",
-  "message": "League not found",
-  "path": "/api/leagues/9b1d5c3e-1234-4567-8901-123456789abc/comparisons/gameweeks"
-}
-```
-
-### 409 Conflict
-
-Returned when the requested gameweek exists but is not yet completed.
-
-```json
-{
-  "status": 409,
-  "error": "GAMEWEEK_NOT_COMPLETED",
-  "message": "Predictions for this gameweek are not available yet",
-  "path": "/api/leagues/9b1d5c3e-1234-4567-8901-123456789abc/comparisons/gameweeks/2026/12"
+  "message": "Gameweek not found",
+  "path": "/api/leagues/9b1d5c3e-1234-4567-8901-123456789abc/comparisons/gameweeks/CL/2026/99"
 }
 ```
 
 ## Example Requests
 
-List completed gameweeks:
+List gameweeks:
 
 ```bash
 curl http://localhost:8080/api/leagues/9b1d5c3e-1234-4567-8901-123456789abc/comparisons/gameweeks \
@@ -264,7 +297,7 @@ curl http://localhost:8080/api/leagues/9b1d5c3e-1234-4567-8901-123456789abc/comp
 Retrieve a gameweek comparison:
 
 ```bash
-curl "http://localhost:8080/api/leagues/9b1d5c3e-1234-4567-8901-123456789abc/comparisons/gameweeks/2026/12" \
+curl "http://localhost:8080/api/leagues/9b1d5c3e-1234-4567-8901-123456789abc/comparisons/gameweeks/CL/2026/1" \
   -H "Authorization: Bearer <access-token>"
 ```
 
@@ -272,11 +305,14 @@ curl "http://localhost:8080/api/leagues/9b1d5c3e-1234-4567-8901-123456789abc/com
 
 | Method | Endpoint | Authentication | Description |
 |---|---|---|---|
-| `GET` | `/api/leagues/{leagueId}/comparisons/gameweeks` | Required + membership | List completed gameweeks |
-| `GET` | `/api/leagues/{leagueId}/comparisons/gameweeks/{season}/{gameweek}` | Required + membership | Compare member predictions for a completed gameweek |
+| `GET` | `/api/leagues/{leagueId}/comparisons/gameweeks` | Required + membership | List gameweeks with eligible-match counts |
+| `GET` | `/api/leagues/{leagueId}/comparisons/gameweeks/{competition}/{season}/{gameweek}` | Required + membership | Compare member predictions for eligible matches |
 
 ## Notes and Limitations
 
-- Gameweeks are derived from kickoff ISO week plus calendar year because the application does not persist an explicit matchday on matches.
+- A gameweek is the provider matchday scoped to its competition and season; it
+  is persisted on matches, never inferred from the kickoff date.
 - Grouping is global (shared fixtures). League membership is enforced per request.
+- Only matches with a persisted final result and completed scoring appear; the
+  rest of the gameweek may still be in progress.
 - The comparison is read-only; it does not allow editing or deleting predictions.

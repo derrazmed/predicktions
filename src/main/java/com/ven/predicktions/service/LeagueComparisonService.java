@@ -8,11 +8,12 @@ import java.util.UUID;
 
 public interface LeagueComparisonService {
 
-    List<GameweekSummaryResponse> getCompletedGameweeks(UUID userId, UUID leagueId);
+    List<GameweekSummaryResponse> getGameweeks(UUID userId, UUID leagueId);
 
     GameweekComparisonResponse getGameweekComparison(
             UUID userId,
             UUID leagueId,
+            String competition,
             int season,
             int gameweek,
             UUID memberId

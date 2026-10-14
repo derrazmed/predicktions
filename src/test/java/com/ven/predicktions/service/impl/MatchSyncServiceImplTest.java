@@ -148,6 +148,85 @@ class MatchSyncServiceImplTest {
     }
 
     @Test
+    void shouldPersistProviderGameweekIdentityOnNewMatches() {
+
+        SportsMatch sportsMatch = new SportsMatch(
+                "575400",
+                "Home",
+                "Away",
+                Instant.parse("2026-09-10T16:45:00Z"),
+                null,
+                null,
+                MatchStatus.SCHEDULED,
+                "CL",
+                2026,
+                1
+        );
+
+        when(sportsProvider.getCompetitionMatches("CL"))
+                .thenReturn(List.of(sportsMatch));
+
+        when(matchRepository.findByExternalId("575400"))
+                .thenReturn(Optional.empty());
+
+        when(matchRepository.save(any(Match.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        matchSyncService.synchronizeFixtures("CL");
+
+        ArgumentCaptor<Match> captor =
+                ArgumentCaptor.forClass(Match.class);
+
+        verify(matchRepository).save(captor.capture());
+
+        Match savedMatch = captor.getValue();
+
+        assertThat(savedMatch.getCompetitionCode()).isEqualTo("CL");
+        assertThat(savedMatch.getSeason()).isEqualTo(2026);
+        assertThat(savedMatch.getMatchday()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRefreshProviderGameweekIdentityOnExistingMatches() {
+
+        Match existingMatch = new Match(
+                "575401",
+                "Home",
+                "Away",
+                Instant.parse("2026-09-10T16:45:00Z"),
+                MatchStatus.SCHEDULED
+        );
+
+        SportsMatch finishedMatch = new SportsMatch(
+                "575401",
+                "Home",
+                "Away",
+                Instant.parse("2026-09-10T16:45:00Z"),
+                2,
+                1,
+                MatchStatus.FINISHED,
+                "CL",
+                2026,
+                2
+        );
+
+        when(sportsProvider.getMatchdayMatches("CL", 2))
+                .thenReturn(List.of(finishedMatch));
+
+        when(matchRepository.findByExternalId("575401"))
+                .thenReturn(Optional.of(existingMatch));
+
+        when(matchRepository.save(any(Match.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        matchSyncService.synchronizeResults("CL", 2);
+
+        assertThat(existingMatch.getCompetitionCode()).isEqualTo("CL");
+        assertThat(existingMatch.getSeason()).isEqualTo(2026);
+        assertThat(existingMatch.getMatchday()).isEqualTo(2);
+    }
+
+    @Test
     void shouldSynchronizeMultipleMatchesInOneBatch() {
 
         SportsMatch firstMatch = new SportsMatch(

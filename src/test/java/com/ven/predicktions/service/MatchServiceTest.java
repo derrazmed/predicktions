@@ -47,7 +47,10 @@ class MatchServiceTest {
                 match.getKickoffAt(),
                 match.getHomeScore(),
                 match.getAwayScore(),
-                match.getStatus()
+                match.getStatus(),
+                match.getCompetitionCode(),
+                match.getSeason(),
+                match.getMatchday()
         );
 
         when(matchRepository.findAll())
