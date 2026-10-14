@@ -9,6 +9,8 @@ import com.ven.predicktions.model.MatchStatus;
 import com.ven.predicktions.repository.MatchRepository;
 import com.ven.predicktions.service.MatchSyncService;
 import com.ven.predicktions.service.PredictionRecalculationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,9 @@ import java.time.Instant;
 
 @Service
 public class MatchSyncServiceImpl implements MatchSyncService {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(MatchSyncServiceImpl.class);
 
     private final SportsProvider sportsProvider;
     private final MatchRepository matchRepository;
@@ -156,14 +161,23 @@ public class MatchSyncServiceImpl implements MatchSyncService {
     }
 
     private void recalculateIfFinished(Match match) {
-        if (predictionRecalculationService == null) {
+        boolean hasFinalResult = match.getStatus() == MatchStatus.FINISHED
+                && match.getHomeScore() != null
+                && match.getAwayScore() != null;
+
+        if (!hasFinalResult) {
             return;
         }
 
-        if (match.getStatus() == MatchStatus.FINISHED
-                && match.getHomeScore() != null
-                && match.getAwayScore() != null) {
-            predictionRecalculationService.recalculate(match, null);
+        if (predictionRecalculationService == null) {
+            log.warn(
+                    "Finished match {} was synchronised without recalculating "
+                            + "its predictions because no recalculation service is configured",
+                    match.getExternalId()
+            );
+            return;
         }
+
+        predictionRecalculationService.recalculate(match, null);
     }
 }
