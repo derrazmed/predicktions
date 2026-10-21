@@ -40,7 +40,7 @@ sports:
   sync:
     competition-code: CL
     fixtures-cron: "0 0 1 1 * *"
-    results-cron: "0 15 21 * * *"
+    results-cron: "0 15 22 * * *"
 
     fixture-schedules:
       - phase: LEAGUE
